@@ -8,11 +8,17 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: macos-14
+            python-version: "3.12"
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Check out repository
@@ -38,7 +44,7 @@ jobs:
         run: pyright
 
       - name: Run tests
-        run: pytest -q
+        run: pytest --cov=src/pyslang_mcp --cov-report=xml --cov-report=term-missing:skip-covered -q
 
   hdl-smoke:
     runs-on: ubuntu-latest

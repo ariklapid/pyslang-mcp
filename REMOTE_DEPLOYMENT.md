@@ -1,5 +1,9 @@
 # 🌐 Remote Secure Deployment Plan
 
+> [!CAUTION]
+> DESIGN ONLY. This document describes a possible hosted direction; it does not
+> mean remote deployment exists in the current alpha implementation.
+
 This document describes how to evolve `pyslang-mcp` from a local `stdio`
 analysis server into a remotely connectable MCP service that feels similar to
 well-known hosted MCP integrations such as GitHub or Google Sheets, while still

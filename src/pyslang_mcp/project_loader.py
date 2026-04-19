@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import shlex
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -147,11 +146,9 @@ def _visit_filelist(*, root: Path, filelist: Path, state: _ParsedFilelist) -> No
     for line_number, raw_line in enumerate(
         filelist.read_text(encoding="utf-8").splitlines(), start=1
     ):
-        line = raw_line.strip()
-        if not line or line.startswith("//") or line.startswith("#"):
+        line = _strip_inline_comments(raw_line).strip()
+        if not line:
             continue
-        line = re.split(r"\s+//", raw_line, maxsplit=1)[0]
-        line = re.split(r"\s+#", line, maxsplit=1)[0]
         tokens = shlex.split(line, comments=False, posix=True)
         index = 0
         while index < len(tokens):
@@ -222,6 +219,32 @@ def _visit_filelist(*, root: Path, filelist: Path, state: _ParsedFilelist) -> No
                     )
                 )
             index += 1
+
+
+def _strip_inline_comments(raw_line: str) -> str:
+    """Strip shell-style inline comments outside quoted strings."""
+
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(raw_line):
+        if quote is not None:
+            if escaped:
+                escaped = False
+                continue
+            if character == "\\":
+                escaped = True
+                continue
+            if character == quote:
+                quote = None
+            continue
+        if character in {'"', "'"}:
+            quote = character
+            continue
+        if character == "#":
+            return raw_line[:index]
+        if character == "/" and index + 1 < len(raw_line) and raw_line[index + 1] == "/":
+            return raw_line[:index]
+    return raw_line
 
 
 def _normalize_path(
