@@ -38,3 +38,14 @@ def test_load_project_from_files_rejects_paths_outside_root(tmp_path: Path) -> N
             project_root=root,
             files=[str(outside)],
         )
+
+
+def test_filelist_strips_inline_comments_without_whitespace(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "top.sv").write_text("module top; endmodule\n", encoding="utf-8")
+    (root / "project.f").write_text("top.sv// keep comment out of the path\n", encoding="utf-8")
+
+    config = load_project_from_filelist(project_root=root, filelist="project.f")
+
+    assert [path.name for path in config.files] == ["top.sv"]

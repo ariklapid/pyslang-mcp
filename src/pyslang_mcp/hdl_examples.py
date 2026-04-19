@@ -1,23 +1,18 @@
-# ruff: noqa: E402
+"""Shared HDL example corpus helpers used by tests and validation scripts."""
 
 from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIR = REPO_ROOT / "src"
+from .analysis import build_analysis, get_diagnostics
+from .project_loader import load_project_from_filelist, load_project_from_files
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 CORPUS_PATH = REPO_ROOT / "examples" / "hdl" / "corpus.json"
 HDL_SUFFIXES = {".sv", ".svh", ".v"}
-
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from pyslang_mcp.analysis import build_analysis, get_diagnostics
-from pyslang_mcp.project_loader import load_project_from_filelist, load_project_from_files
 
 
 def load_examples(*, smoke_only: bool = False) -> list[dict[str, Any]]:
@@ -61,7 +56,7 @@ def validate_manifest_file_coverage(examples: list[dict[str, Any]]) -> None:
         raise AssertionError(f"HDL files outside manifest coverage:\n{joined}")
 
 
-def load_project(example: dict[str, Any]):
+def load_project(example: dict[str, Any]) -> Any:
     project_root = resolve_example_root(example)
     top_modules = example.get("top_modules")
     if "filelist" in example:

@@ -14,7 +14,7 @@ with filelists, include directories, packages, and multi-module composition.
 
 ### Difficulty Labels
 
-Buggy variants are tagged in [corpus.json](/home/arik/projects/pyslang-mcp/examples/hdl/corpus.json)
+Buggy variants are tagged in [corpus.json](./corpus.json)
 with one of these difficulty levels:
 
 - `easy`: obvious single-module behavioral bugs

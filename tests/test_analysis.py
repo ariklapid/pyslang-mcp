@@ -33,9 +33,14 @@ def test_analysis_over_filelist_fixture() -> None:
     assert {"top", "child", "types_pkg"} <= unit_names
 
     description = describe_design_unit(bundle, name="top")
-    assert description["ports"][0]["name"] == "clk"
-    assert description["child_instances"][0]["name"] == "u_child"
-    assert "payload" in description["declared_names"]
+    assert description["found"] is True
+    assert description["design_unit"]["ports"][0]["name"] == "clk"
+    assert description["design_unit"]["child_instances"][0]["name"] == "u_child"
+    assert "payload" in description["design_unit"]["declared_names"]
+
+    missing_description = describe_design_unit(bundle, name="missing_top")
+    assert missing_description["found"] is False
+    assert missing_description["design_unit"] is None
 
     hierarchy = get_hierarchy(bundle)
     assert hierarchy["hierarchy"][0]["name"] == "top"
@@ -66,10 +71,12 @@ def test_analysis_over_filelist_fixture() -> None:
 
     preprocessing = preprocess_files(bundle)
     assert preprocessing["mode"] == "summary_only"
+    assert preprocessing["effective_defines"] == {"WIDTH": "8"}
     assert preprocessing["files"][0]["include_directives"] == []
 
-    summary = get_project_summary(bundle)
+    summary = get_project_summary(bundle, max_diagnostics=10, max_design_units=20)
     assert summary["summary"]["file_count"] == 3
+    assert summary["limits"]["max_diagnostics"] == 10
 
 
 def test_diagnostics_on_broken_fixture() -> None:

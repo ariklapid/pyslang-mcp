@@ -105,12 +105,19 @@ def filelist_summary(bundle: AnalysisBundle) -> dict[str, Any]:
     )
 
 
-def get_project_summary(bundle: AnalysisBundle) -> dict[str, Any]:
+def get_project_summary(
+    bundle: AnalysisBundle,
+    *,
+    max_diagnostics: int = 50,
+    max_design_units: int = 200,
+    max_depth: int = 6,
+    max_children: int = 100,
+) -> dict[str, Any]:
     """Return a compact project-wide summary."""
 
-    diagnostics = get_diagnostics(bundle, max_items=50)
-    units = list_design_units(bundle, max_items=200)
-    hierarchy = get_hierarchy(bundle, max_depth=6, max_children=100)
+    diagnostics = get_diagnostics(bundle, max_items=max_diagnostics)
+    units = list_design_units(bundle, max_items=max_design_units)
+    hierarchy = get_hierarchy(bundle, max_depth=max_depth, max_children=max_children)
     summary = {
         "project": project_config_json(bundle.project),
         "summary": _base_summary(bundle),
@@ -118,6 +125,12 @@ def get_project_summary(bundle: AnalysisBundle) -> dict[str, Any]:
         "design_units": units["summary"],
         "top_instances": hierarchy["summary"]["top_instances"],
         "tracked_paths": ensure_jsonable_paths(bundle.tracked_paths, bundle.project.project_root),
+        "limits": {
+            "max_diagnostics": max_diagnostics,
+            "max_design_units": max_design_units,
+            "max_depth": max_depth,
+            "max_children": max_children,
+        },
     }
     return stabilize_json(summary)
 
@@ -149,38 +162,14 @@ def get_diagnostics(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[str
 def list_design_units(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[str, Any]:
     """List project-local modules, interfaces, and packages."""
 
-    units: list[dict[str, Any]] = []
-    for definition in sorted(bundle.compilation.getDefinitions(), key=lambda item: item.name):
-        location = _serialize_location(bundle, definition.location)
-        if location is None:
-            continue
-        units.append(
-            {
-                "name": definition.name,
-                "kind": getattr(
-                    getattr(definition, "definitionKind", None), "name", definition.kind.name
-                ),
-                "symbol_kind": definition.kind.name,
-                "hierarchical_path": str(definition.hierarchicalPath),
-                "lexical_path": str(definition.lexicalPath),
-                "instance_count": getattr(definition, "instanceCount", None),
-                "location": location,
-            }
+    units = [
+        unit
+        for unit in (
+            _serialize_design_unit_record(bundle, symbol)
+            for symbol in sorted(_design_unit_symbols(bundle), key=lambda item: item.name)
         )
-    for package in sorted(bundle.compilation.getPackages(), key=lambda item: item.name):
-        location = _serialize_location(bundle, package.location)
-        if location is None:
-            continue
-        units.append(
-            {
-                "name": package.name,
-                "kind": package.kind.name.lower(),
-                "symbol_kind": package.kind.name,
-                "hierarchical_path": str(package.hierarchicalPath),
-                "lexical_path": str(package.lexicalPath),
-                "location": location,
-            }
-        )
+        if unit is not None
+    ]
 
     units_json, truncation = limit_list(units, max_items=max_items)
     type_counts = Counter(str(unit["kind"]) for unit in units)
@@ -199,29 +188,63 @@ def list_design_units(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[s
 def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]:
     """Describe a single project-local design unit by exact name."""
 
-    matches = [unit for unit in _design_unit_symbols(bundle) if unit.name == name]
-    local_matches = [
-        unit for unit in matches if _serialize_location(bundle, unit.location) is not None
+    local_records = [
+        unit
+        for unit in (
+            _serialize_design_unit_record(bundle, symbol)
+            for symbol in sorted(_design_unit_symbols(bundle), key=lambda item: item.name)
+        )
+        if unit is not None
     ]
-    if not local_matches:
-        raise ValueError(f"Design unit not found in project: {name}")
-    if len(local_matches) > 1:
-        raise ValueError(f"Design unit name is ambiguous in project: {name}")
-    symbol = local_matches[0]
+    exact_matches = [record for record in local_records if record["name"] == name]
+    if len(exact_matches) != 1:
+        suggestions = [
+            record
+            for record in local_records
+            if _matches_text(
+                query=name,
+                match_mode="contains",
+                candidates={record["name"], record["hierarchical_path"], record["lexical_path"]},
+            )
+            or str(record["name"]).lower() == name.lower()
+            or str(record["name"]).lower().startswith(name.lower())
+        ][:10]
+        return stabilize_json(
+            {
+                "query": name,
+                "found": False,
+                "ambiguous": len(exact_matches) > 1,
+                "candidates": exact_matches or suggestions,
+                "design_unit": None,
+            }
+        )
+
+    selected_path = str(exact_matches[0]["hierarchical_path"])
+    symbol = next(
+        unit
+        for unit in _design_unit_symbols(bundle)
+        if unit.name == name and str(unit.hierarchicalPath) == selected_path
+    )
     syntax_json = json.loads(symbol.syntax.to_json())
     member_counts = Counter(_collect_member_kinds(syntax_json.get("members", [])))
     description = {
-        "name": symbol.name,
-        "kind": getattr(getattr(symbol, "definitionKind", None), "name", symbol.kind.name),
-        "symbol_kind": symbol.kind.name,
-        "hierarchical_path": str(symbol.hierarchicalPath),
-        "lexical_path": str(symbol.lexicalPath),
-        "location": _serialize_location(bundle, symbol.location),
-        "ports": _extract_ports(syntax_json),
-        "member_kind_counts": dict(sorted(member_counts.items())),
-        "child_instances": _extract_child_instances(syntax_json),
-        "declared_names": _extract_declared_names(syntax_json),
-        "instance_count": getattr(symbol, "instanceCount", None),
+        "query": name,
+        "found": True,
+        "ambiguous": False,
+        "candidates": [],
+        "design_unit": {
+            "name": symbol.name,
+            "kind": getattr(getattr(symbol, "definitionKind", None), "name", symbol.kind.name),
+            "symbol_kind": symbol.kind.name,
+            "hierarchical_path": str(symbol.hierarchicalPath),
+            "lexical_path": str(symbol.lexicalPath),
+            "location": _serialize_location(bundle, symbol.location),
+            "ports": _extract_ports(syntax_json),
+            "member_kind_counts": dict(sorted(member_counts.items())),
+            "child_instances": _extract_child_instances(syntax_json),
+            "declared_names": _extract_declared_names(syntax_json),
+            "instance_count": getattr(symbol, "instanceCount", None),
+        },
     }
     return stabilize_json(description)
 
@@ -414,7 +437,6 @@ def preprocess_files(
                     }
                     for include in tree.getIncludeDirectives()
                 ],
-                "defines": {key: value for key, value in bundle.project.defines},
                 "source_excerpt": excerpt,
             }
         )
@@ -431,6 +453,7 @@ def preprocess_files(
                 "file_count": len(results),
                 "truncation": truncation,
             },
+            "effective_defines": {key: value for key, value in bundle.project.defines},
             "files": limited_results,
         }
     )
@@ -519,9 +542,24 @@ def _read_line(path: Path, line_number: int) -> str | None:
 def _format_diagnostic_message(bundle: AnalysisBundle, diagnostic: Any) -> str:
     message = bundle.diagnostic_engine.getMessage(diagnostic.code)
     for argument in diagnostic.args:
-        replacement = repr(argument) if isinstance(argument, str) else str(argument)
+        replacement = str(argument)
         message = message.replace("{}", replacement, 1)
     return message
+
+
+def _serialize_design_unit_record(bundle: AnalysisBundle, symbol: Any) -> dict[str, Any] | None:
+    location = _serialize_location(bundle, symbol.location)
+    if location is None:
+        return None
+    return {
+        "name": symbol.name,
+        "kind": getattr(getattr(symbol, "definitionKind", None), "name", symbol.kind.name),
+        "symbol_kind": symbol.kind.name,
+        "hierarchical_path": str(symbol.hierarchicalPath),
+        "lexical_path": str(symbol.lexicalPath),
+        "instance_count": getattr(symbol, "instanceCount", None),
+        "location": location,
+    }
 
 
 def _tracked_paths(project: ProjectConfig, source_manager: Any) -> tuple[Path, ...]:

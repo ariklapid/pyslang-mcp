@@ -32,7 +32,7 @@ compiler frontend:
 
 ## 🚦 Status
 
-As of 2026-04-18, the repository contains:
+As of 2026-04-19, the repository contains:
 
 - `pyproject.toml` packaging metadata
 - a `FastMCP` server under `src/pyslang_mcp/`
@@ -85,7 +85,7 @@ being silently ignored.
 ## 🧪 HDL Example Corpus
 
 The repo now includes a generated HDL corpus under
-[`examples/hdl`](/home/arik/projects/pyslang-mcp/examples/hdl) with:
+[`examples/hdl`](./examples/hdl/) with:
 
 - clean reference designs from single modules up to small-IP projects
 - intentionally buggy duplicates labeled `easy`, `medium`, and `hard`
@@ -346,9 +346,11 @@ Example `find_symbol` payload:
 
 - responses are JSON dictionaries
 - large result lists include truncation metadata
+- recoverable input problems return MCP tool errors with structured error payloads
+- `describe_design_unit` returns `found` / `ambiguous` results instead of throwing for normal lookup misses
 - `preprocess_files` is summary-oriented; it does not claim to reproduce a full
   standalone preprocessed output stream
-- if a path escapes the declared root, the call fails instead of reading it
+- if a path escapes the declared root, the tool returns an error instead of reading it
 
 ## 🏗️ Architecture
 
@@ -445,12 +447,13 @@ architecture, security model, and rollout plan.
 ./.venv/bin/ruff format src tests
 ./.venv/bin/ruff check src tests
 ./.venv/bin/pyright
-./.venv/bin/pytest -q
+./.venv/bin/pytest --cov=src/pyslang_mcp --cov-report=term-missing:skip-covered -q
 ```
 
 ## ⚠️ Known Limitations
 
 - `preprocess_files` is summary-oriented and intentionally conservative
+- `find_symbol` currently re-walks the elaborated design per query; it is useful today but not yet indexed for larger corpora
 - the filelist parser is a useful subset, not full simulator compatibility
 - tool outputs are designed to be stable and compact, but they are still alpha
 - packaging and registry publishing are still pending
