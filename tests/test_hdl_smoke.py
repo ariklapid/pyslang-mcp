@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -13,6 +14,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.hdl_examples import load_examples, validate_example
+
+pytestmark = pytest.mark.skipif(
+    shutil.which("verilator") is None,
+    reason="Verilator is required for HDL smoke validation.",
+)
 
 SMOKE_EXAMPLES = load_examples(smoke_only=True)
 
