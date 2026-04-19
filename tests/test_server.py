@@ -52,6 +52,7 @@ def test_parse_filelist_tool() -> None:
     )
 
     assert not is_error
+    assert payload["project_status"]["status"] == "ok"
     assert payload["parse"]["file_count"] == 3
     assert payload["filelist"]["filelists"] == ["project.f", "rtl.f"]
 
@@ -97,3 +98,17 @@ def test_invalid_argument_combo_returns_structured_tool_error() -> None:
 
     assert is_error
     assert payload["error"]["code"] == "invalid_arguments"
+
+
+def test_get_diagnostics_reports_incomplete_project_status() -> None:
+    payload, is_error = _call_tool_json(
+        "get_diagnostics",
+        {
+            "project_root": str(FIXTURES / "broken"),
+            "files": ["broken.sv"],
+        },
+    )
+
+    assert not is_error
+    assert payload["project_status"]["status"] == "incomplete"
+    assert payload["project_status"]["unresolved_references"] >= 1

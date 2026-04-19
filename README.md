@@ -346,6 +346,8 @@ Example `find_symbol` payload:
 
 - responses are JSON dictionaries
 - large result lists include truncation metadata
+- every successful tool response carries `project_status` so clients can tell
+  `ok` from `degraded` or `incomplete` analysis
 - recoverable input problems return MCP tool errors with structured error payloads
 - `describe_design_unit` returns `found` / `ambiguous` results instead of throwing for normal lookup misses
 - `preprocess_files` is summary-oriented; it does not claim to reproduce a full

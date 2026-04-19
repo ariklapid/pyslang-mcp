@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Literal
@@ -17,6 +18,7 @@ from pyslang import (
     SyntaxTree,
 )
 
+from .cache import project_hash
 from .serializers import (
     ensure_jsonable_paths,
     limit_list,
@@ -25,7 +27,14 @@ from .serializers import (
     stabilize_json,
     top_counts,
 )
-from .types import AnalysisBundle, ProjectConfig
+from .types import (
+    AnalysisBundle,
+    AnalysisIndices,
+    JsonValue,
+    ProjectConfig,
+    ProjectStatusInfo,
+    SearchIndexEntry,
+)
 
 MatchMode = Literal["exact", "contains", "startswith"]
 
@@ -60,33 +69,48 @@ def build_analysis(project: ProjectConfig) -> AnalysisBundle:
         syntax_trees[file_path] = tree
         compilation.addSyntaxTree(tree)
 
+    diagnostics = tuple(compilation.getAllDiagnostics())
     tracked_paths = _tracked_paths(project, source_manager)
-    return AnalysisBundle(
+    bundle = AnalysisBundle(
         project=project,
+        project_hash=project_hash(project),
         source_manager=source_manager,
         bag=bag,
         compilation=compilation,
         syntax_trees=syntax_trees,
         diagnostic_engine=DiagnosticEngine(source_manager),
+        diagnostics=diagnostics,
+        project_status=ProjectStatusInfo(
+            status="ok",
+            unresolved_references=0,
+            diagnostic_count=len(diagnostics),
+            error_count=0,
+        ),
         tracked_paths=tracked_paths,
+        indices=AnalysisIndices(),
     )
+    bundle.project_status = _project_status(bundle)
+    bundle.indices = _build_indices(bundle)
+    return bundle
 
 
 def parse_summary(bundle: AnalysisBundle) -> dict[str, Any]:
     """Return a concise parse summary for explicit file mode."""
 
-    return stabilize_json(
+    return _with_project_status(
+        bundle,
         {
             "project": project_config_json(bundle.project),
             "parse": _base_summary(bundle),
-        }
+        },
     )
 
 
 def filelist_summary(bundle: AnalysisBundle) -> dict[str, Any]:
     """Return a concise parse summary for filelist mode."""
 
-    return stabilize_json(
+    return _with_project_status(
+        bundle,
         {
             "project": project_config_json(bundle.project),
             "parse": _base_summary(bundle),
@@ -101,7 +125,7 @@ def filelist_summary(bundle: AnalysisBundle) -> dict[str, Any]:
                 ),
                 "unsupported_entries": list(bundle.project.unsupported_filelist_entries),
             },
-        }
+        },
     )
 
 
@@ -118,35 +142,38 @@ def get_project_summary(
     diagnostics = get_diagnostics(bundle, max_items=max_diagnostics)
     units = list_design_units(bundle, max_items=max_design_units)
     hierarchy = get_hierarchy(bundle, max_depth=max_depth, max_children=max_children)
-    summary = {
-        "project": project_config_json(bundle.project),
-        "summary": _base_summary(bundle),
-        "diagnostics": diagnostics["summary"],
-        "design_units": units["summary"],
-        "top_instances": hierarchy["summary"]["top_instances"],
-        "tracked_paths": ensure_jsonable_paths(bundle.tracked_paths, bundle.project.project_root),
-        "limits": {
-            "max_diagnostics": max_diagnostics,
-            "max_design_units": max_design_units,
-            "max_depth": max_depth,
-            "max_children": max_children,
+    summary = _with_project_status(
+        bundle,
+        {
+            "project": project_config_json(bundle.project),
+            "summary": _base_summary(bundle),
+            "diagnostics": diagnostics["summary"],
+            "design_units": units["summary"],
+            "top_instances": hierarchy["summary"]["top_instances"],
+            "tracked_paths": ensure_jsonable_paths(
+                bundle.tracked_paths, bundle.project.project_root
+            ),
+            "limits": {
+                "max_diagnostics": max_diagnostics,
+                "max_design_units": max_design_units,
+                "max_depth": max_depth,
+                "max_children": max_children,
+            },
         },
-    }
-    return stabilize_json(summary)
+    )
+    return summary
 
 
 def get_diagnostics(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[str, Any]:
     """Return parse and semantic diagnostics."""
 
-    diagnostics = [
-        _serialize_diagnostic(bundle, diagnostic)
-        for diagnostic in bundle.compilation.getAllDiagnostics()
-    ]
+    diagnostics = [_serialize_diagnostic(bundle, diagnostic) for diagnostic in bundle.diagnostics]
     diagnostics_json, truncation = limit_list(diagnostics, max_items=max_items)
     severity_counts = Counter(
         str(entry["severity"]).lower() for entry in diagnostics if entry.get("severity")
     )
-    return stabilize_json(
+    return _with_project_status(
+        bundle,
         {
             "project_root": bundle.project.project_root.as_posix(),
             "summary": {
@@ -155,25 +182,18 @@ def get_diagnostics(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[str
                 "truncation": truncation,
             },
             "diagnostics": diagnostics_json,
-        }
+        },
     )
 
 
 def list_design_units(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[str, Any]:
     """List project-local modules, interfaces, and packages."""
 
-    units = [
-        unit
-        for unit in (
-            _serialize_design_unit_record(bundle, symbol)
-            for symbol in sorted(_design_unit_symbols(bundle), key=lambda item: item.name)
-        )
-        if unit is not None
-    ]
-
+    units = list(bundle.indices.design_unit_records)
     units_json, truncation = limit_list(units, max_items=max_items)
     type_counts = Counter(str(unit["kind"]) for unit in units)
-    return stabilize_json(
+    return _with_project_status(
+        bundle,
         {
             "summary": {
                 "total": len(units),
@@ -181,22 +201,15 @@ def list_design_units(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[s
                 "truncation": truncation,
             },
             "design_units": units_json,
-        }
+        },
     )
 
 
 def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]:
     """Describe a single project-local design unit by exact name."""
 
-    local_records = [
-        unit
-        for unit in (
-            _serialize_design_unit_record(bundle, symbol)
-            for symbol in sorted(_design_unit_symbols(bundle), key=lambda item: item.name)
-        )
-        if unit is not None
-    ]
-    exact_matches = [record for record in local_records if record["name"] == name]
+    local_records = list(bundle.indices.design_unit_records)
+    exact_matches = list(bundle.indices.design_unit_records_by_name.get(name, ()))
     if len(exact_matches) != 1:
         suggestions = [
             record
@@ -204,28 +217,33 @@ def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]
             if _matches_text(
                 query=name,
                 match_mode="contains",
-                candidates={record["name"], record["hierarchical_path"], record["lexical_path"]},
+                candidates=(
+                    str(record["name"]),
+                    str(record["hierarchical_path"]),
+                    str(record["lexical_path"]),
+                ),
             )
             or str(record["name"]).lower() == name.lower()
             or str(record["name"]).lower().startswith(name.lower())
         ][:10]
-        return stabilize_json(
+        return _with_project_status(
+            bundle,
             {
                 "query": name,
                 "found": False,
                 "ambiguous": len(exact_matches) > 1,
                 "candidates": exact_matches or suggestions,
                 "design_unit": None,
-            }
+            },
         )
 
     selected_path = str(exact_matches[0]["hierarchical_path"])
-    symbol = next(
-        unit
-        for unit in _design_unit_symbols(bundle)
-        if unit.name == name and str(unit.hierarchicalPath) == selected_path
-    )
-    syntax_json = json.loads(symbol.syntax.to_json())
+    cached_description = bundle.indices.design_unit_description_cache.get(selected_path)
+    if cached_description is not None:
+        return _with_project_status(bundle, dict(cached_description))
+
+    symbol = bundle.indices.design_unit_symbol_by_key[(name, selected_path)]
+    syntax_json = _design_unit_syntax_json(bundle, symbol)
     member_counts = Counter(_collect_member_kinds(syntax_json.get("members", [])))
     description = {
         "query": name,
@@ -246,7 +264,8 @@ def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]
             "instance_count": getattr(symbol, "instanceCount", None),
         },
     }
-    return stabilize_json(description)
+    bundle.indices.design_unit_description_cache[selected_path] = description
+    return _with_project_status(bundle, description)
 
 
 def get_hierarchy(
@@ -257,20 +276,12 @@ def get_hierarchy(
 ) -> dict[str, Any]:
     """Return the elaborated instance hierarchy from `root.topInstances`."""
 
-    instance_map: dict[str, Any] = {}
-    children_map: defaultdict[str | None, list[str]] = defaultdict(list)
-    for instance in _collect_instances(bundle):
-        path = str(instance.hierarchicalPath)
-        instance_map[path] = instance
-        parent = path.rsplit(".", 1)[0] if "." in path else None
-        children_map[parent].append(path)
-
-    for values in children_map.values():
-        values.sort()
+    instance_map = bundle.indices.instance_map
+    children_map = bundle.indices.children_map
 
     def build_node(path: str, depth: int) -> dict[str, Any]:
         instance = instance_map[path]
-        child_paths = children_map.get(path, [])
+        child_paths = children_map.get(path, ())
         node = _serialize_instance(bundle, instance)
         if depth >= max_depth:
             if child_paths:
@@ -284,11 +295,10 @@ def get_hierarchy(
             node["truncated_children"] = len(child_paths) - len(limited_children)
         return node
 
-    top_paths = [
-        str(instance.hierarchicalPath) for instance in bundle.compilation.getRoot().topInstances
-    ]
+    top_paths = bundle.indices.top_instance_paths
     hierarchy = [build_node(path, depth=1) for path in top_paths if path in instance_map]
-    return stabilize_json(
+    return _with_project_status(
+        bundle,
         {
             "summary": {
                 "top_instances": [node["hierarchical_path"] for node in hierarchy],
@@ -296,7 +306,7 @@ def get_hierarchy(
                 "max_depth_requested": max_depth,
             },
             "hierarchy": hierarchy,
-        }
+        },
     )
 
 
@@ -310,49 +320,26 @@ def find_symbol(
 ) -> dict[str, Any]:
     """Find declarations and references matching a symbol name or hierarchical path."""
 
-    declarations: list[dict[str, Any]] = []
-    references: list[dict[str, Any]] = []
-    seen_declarations: set[tuple[str, str, str | None]] = set()
-    seen_references: set[tuple[str, str, str | None, str | None]] = set()
-
-    for symbol in _design_unit_symbols(bundle):
-        _maybe_add_declaration(
-            bundle=bundle,
-            symbol=symbol,
+    declarations = _matching_index_payloads(
+        entries=bundle.indices.declaration_entries,
+        exact_index=bundle.indices.declaration_exact,
+        query=query,
+        match_mode=match_mode,
+    )
+    references = (
+        _matching_index_payloads(
+            entries=bundle.indices.reference_entries,
+            exact_index=bundle.indices.reference_exact,
             query=query,
             match_mode=match_mode,
-            seen=seen_declarations,
-            target=declarations,
         )
-
-    def visit(symbol: Any) -> bool:
-        if include_references:
-            references.extend(
-                _collect_reference_hits(
-                    bundle=bundle,
-                    symbol=symbol,
-                    query=query,
-                    match_mode=match_mode,
-                    seen=seen_references,
-                )
-            )
-        if getattr(symbol, "kind", None) and symbol.kind.name == "NamedValue":
-            return True
-        if getattr(symbol, "name", None):
-            _maybe_add_declaration(
-                bundle=bundle,
-                symbol=symbol,
-                query=query,
-                match_mode=match_mode,
-                seen=seen_declarations,
-                target=declarations,
-            )
-        return True
-
-    bundle.compilation.getRoot().visit(visit)
+        if include_references
+        else []
+    )
     limited_declarations, decl_truncation = limit_list(declarations, max_items=max_results)
     limited_references, ref_truncation = limit_list(references, max_items=max_results)
-    return stabilize_json(
+    return _with_project_status(
+        bundle,
         {
             "query": query,
             "match_mode": match_mode,
@@ -364,7 +351,7 @@ def find_symbol(
                 "declaration_truncation": decl_truncation,
                 "reference_truncation": ref_truncation,
             },
-        }
+        },
     )
 
 
@@ -404,14 +391,15 @@ def dump_syntax_tree_summary(
         )
 
     limited_files, truncation = limit_list(file_summaries, max_items=max_files)
-    return stabilize_json(
+    return _with_project_status(
+        bundle,
         {
             "summary": {
                 "file_count": len(file_summaries),
                 "truncation": truncation,
             },
             "files": limited_files,
-        }
+        },
     )
 
 
@@ -442,7 +430,8 @@ def preprocess_files(
         )
 
     limited_results, truncation = limit_list(results, max_items=max_files)
-    return stabilize_json(
+    return _with_project_status(
+        bundle,
         {
             "mode": "summary_only",
             "note": (
@@ -455,23 +444,74 @@ def preprocess_files(
             },
             "effective_defines": {key: value for key, value in bundle.project.defines},
             "files": limited_results,
-        }
+        },
     )
 
 
 def _base_summary(bundle: AnalysisBundle) -> dict[str, Any]:
-    diagnostics = bundle.compilation.getAllDiagnostics()
     severity_counts = Counter(
-        _serialize_diagnostic(bundle, diagnostic)["severity"] for diagnostic in diagnostics
+        _serialize_diagnostic(bundle, diagnostic)["severity"] for diagnostic in bundle.diagnostics
     )
     return {
         "file_count": len(bundle.project.files),
         "include_dir_count": len(bundle.project.include_dirs),
         "define_count": len(bundle.project.defines),
         "top_module_count": len(bundle.project.top_modules),
-        "diagnostic_count": len(diagnostics),
+        "diagnostic_count": len(bundle.diagnostics),
         "diagnostic_severity_counts": dict(sorted(severity_counts.items())),
     }
+
+
+def _with_project_status(bundle: AnalysisBundle, payload: dict[str, Any]) -> dict[str, Any]:
+    return stabilize_json(
+        {
+            "project_status": {
+                "status": bundle.project_status.status,
+                "unresolved_references": bundle.project_status.unresolved_references,
+                "diagnostic_count": bundle.project_status.diagnostic_count,
+                "error_count": bundle.project_status.error_count,
+            },
+            **payload,
+        }
+    )
+
+
+def _project_status(bundle: AnalysisBundle) -> ProjectStatusInfo:
+    error_count = sum(1 for diagnostic in bundle.diagnostics if bool(diagnostic.isError()))
+    unresolved_references = sum(
+        1
+        for diagnostic in bundle.diagnostics
+        if bool(diagnostic.isError())
+        and _looks_like_unresolved_reference(_format_diagnostic_message(bundle, diagnostic))
+    )
+    if unresolved_references > 0:
+        status: Literal["ok", "degraded", "incomplete"] = "incomplete"
+    elif bundle.diagnostics:
+        status = "degraded"
+    else:
+        status = "ok"
+    return ProjectStatusInfo(
+        status=status,
+        unresolved_references=unresolved_references,
+        diagnostic_count=len(bundle.diagnostics),
+        error_count=error_count,
+    )
+
+
+def _looks_like_unresolved_reference(message: str) -> bool:
+    message_lower = message.lower()
+    patterns = (
+        "undeclared",
+        "unresolved",
+        "unknown",
+        "not declared",
+        "could not resolve",
+        "not found",
+        "does not refer to a visible declaration",
+        "no member named",
+        "invalid type name",
+    )
+    return any(pattern in message_lower for pattern in patterns)
 
 
 def _design_unit_symbols(bundle: AnalysisBundle) -> list[Any]:
@@ -541,10 +581,12 @@ def _read_line(path: Path, line_number: int) -> str | None:
 
 def _format_diagnostic_message(bundle: AnalysisBundle, diagnostic: Any) -> str:
     message = bundle.diagnostic_engine.getMessage(diagnostic.code)
-    for argument in diagnostic.args:
-        replacement = str(argument)
-        message = message.replace("{}", replacement, 1)
-    return message
+    arguments = [str(argument) for argument in diagnostic.args]
+    try:
+        return message.format(*arguments)
+    except (IndexError, KeyError, ValueError):
+        replacements = iter(arguments)
+        return re.sub(r"(?<!\{)\{\}(?!\})", lambda _: next(replacements, "{}"), message)
 
 
 def _serialize_design_unit_record(bundle: AnalysisBundle, symbol: Any) -> dict[str, Any] | None:
@@ -576,18 +618,6 @@ def _tracked_paths(project: ProjectConfig, source_manager: Any) -> tuple[Path, .
     return tuple(sorted(tracked))
 
 
-def _collect_instances(bundle: AnalysisBundle) -> list[Any]:
-    instances: list[Any] = []
-
-    def visit(symbol: Any) -> bool:
-        if getattr(symbol, "kind", None) and symbol.kind.name == "Instance":
-            instances.append(symbol)
-        return True
-
-    bundle.compilation.getRoot().visit(visit)
-    return instances
-
-
 def _serialize_instance(bundle: AnalysisBundle, instance: Any) -> dict[str, Any]:
     return {
         "name": instance.name,
@@ -607,6 +637,8 @@ def _serialize_instance(bundle: AnalysisBundle, instance: Any) -> dict[str, Any]
 
 
 def _source_snippet(bundle: AnalysisBundle, source_range: Any, *, limit: int = 80) -> str | None:
+    if source_range is None:
+        return None
     try:
         text = bundle.source_manager.getSourceText(source_range.start.buffer)
     except Exception:
@@ -615,13 +647,86 @@ def _source_snippet(bundle: AnalysisBundle, source_range: Any, *, limit: int = 8
     return snippet[:limit] if snippet else None
 
 
-def _matches_symbol(query: str, match_mode: MatchMode, symbol: Any) -> bool:
-    candidates = {
-        getattr(symbol, "name", ""),
-        str(getattr(symbol, "hierarchicalPath", "")),
-        str(getattr(symbol, "lexicalPath", "")),
+def _build_indices(bundle: AnalysisBundle) -> AnalysisIndices:
+    design_unit_symbols = tuple(sorted(_design_unit_symbols(bundle), key=lambda item: item.name))
+
+    design_unit_records: list[dict[str, JsonValue]] = []
+    design_unit_records_by_name: defaultdict[str, list[dict[str, JsonValue]]] = defaultdict(list)
+    design_unit_symbol_by_key: dict[tuple[str, str], Any] = {}
+    for symbol in design_unit_symbols:
+        record = _serialize_design_unit_record(bundle, symbol)
+        if record is None:
+            continue
+        design_unit_records.append(record)
+        design_unit_records_by_name[str(record["name"])].append(record)
+        design_unit_symbol_by_key[(str(record["name"]), str(record["hierarchical_path"]))] = symbol
+
+    declaration_entries: list[SearchIndexEntry] = []
+    declaration_exact: defaultdict[str, list[dict[str, JsonValue]]] = defaultdict(list)
+    declaration_seen: set[tuple[str, str, str | None]] = set()
+    for symbol in design_unit_symbols:
+        entry = _declaration_entry(bundle=bundle, symbol=symbol, seen=declaration_seen)
+        if entry is not None:
+            declaration_entries.append(entry)
+            _add_exact_payload(declaration_exact, entry)
+
+    reference_entries: list[SearchIndexEntry] = []
+    reference_exact: defaultdict[str, list[dict[str, JsonValue]]] = defaultdict(list)
+    reference_seen: set[tuple[str, str, str | None, str | None]] = set()
+
+    def visit(symbol: Any) -> bool:
+        if getattr(symbol, "name", None):
+            entry = _declaration_entry(bundle=bundle, symbol=symbol, seen=declaration_seen)
+            if entry is not None:
+                declaration_entries.append(entry)
+                _add_exact_payload(declaration_exact, entry)
+        for entry in _collect_reference_entries(bundle=bundle, symbol=symbol, seen=reference_seen):
+            reference_entries.append(entry)
+            _add_exact_payload(reference_exact, entry)
+        return True
+
+    bundle.compilation.getRoot().visit(visit)
+    instance_map, children_map, top_instance_paths = _instance_index(bundle)
+
+    return AnalysisIndices(
+        design_unit_symbols=design_unit_symbols,
+        design_unit_records=tuple(design_unit_records),
+        design_unit_records_by_name={
+            name: tuple(records) for name, records in design_unit_records_by_name.items()
+        },
+        design_unit_symbol_by_key=design_unit_symbol_by_key,
+        declaration_entries=tuple(declaration_entries),
+        declaration_exact={name: tuple(records) for name, records in declaration_exact.items()},
+        reference_entries=tuple(reference_entries),
+        reference_exact={name: tuple(records) for name, records in reference_exact.items()},
+        instance_map=instance_map,
+        children_map=children_map,
+        top_instance_paths=top_instance_paths,
+    )
+
+
+def _instance_index(
+    bundle: AnalysisBundle,
+) -> tuple[dict[str, Any], dict[str | None, tuple[str, ...]], tuple[str, ...]]:
+    instance_map: dict[str, Any] = {}
+    children_map_lists: defaultdict[str | None, list[str]] = defaultdict(list)
+
+    def visit(symbol: Any) -> bool:
+        if getattr(symbol, "kind", None) and symbol.kind.name == "Instance":
+            path = str(symbol.hierarchicalPath)
+            instance_map[path] = symbol
+            parent = path.rsplit(".", 1)[0] if "." in path else None
+            children_map_lists[parent].append(path)
+        return True
+
+    bundle.compilation.getRoot().visit(visit)
+    children_map = {
+        parent: tuple(sorted(child_paths)) for parent, child_paths in children_map_lists.items()
     }
-    return _matches_text(query=query, match_mode=match_mode, candidates=candidates)
+    top_instance_paths = tuple(
+        str(instance.hierarchicalPath) for instance in bundle.compilation.getRoot().topInstances
+    )
+    return instance_map, children_map, top_instance_paths
 
 
 def _matches_text(query: str, match_mode: MatchMode, candidates: Any) -> bool:
@@ -639,6 +744,23 @@ def _matches_text(query: str, match_mode: MatchMode, candidates: Any) -> bool:
     return False
 
 
+def _normalized_candidates(candidates: set[str | None]) -> tuple[str, ...]:
+    normalized = {
+        candidate.strip().lower()
+        for candidate in candidates
+        if isinstance(candidate, str) and candidate.strip()
+    }
+    return tuple(sorted(normalized))
+
+
+def _symbol_search_candidates(symbol: Any) -> set[str | None]:
+    return {
+        getattr(symbol, "name", None),
+        str(getattr(symbol, "hierarchicalPath", "")),
+        str(getattr(symbol, "lexicalPath", "")),
+    }
+
+
 def _leaf_type_name(value: str | None) -> str | None:
     if not value:
         return None
@@ -651,63 +773,90 @@ def _leaf_type_name(value: str | None) -> str | None:
     return cleaned or None
 
 
-def _collect_reference_hits(
+def _declaration_entry(
     *,
     bundle: AnalysisBundle,
     symbol: Any,
-    query: str,
-    match_mode: MatchMode,
+    seen: set[tuple[str, str, str | None]],
+) -> SearchIndexEntry | None:
+    location = _serialize_location(bundle, getattr(symbol, "location", None))
+    path = str(getattr(symbol, "hierarchicalPath", getattr(symbol, "name", "")))
+    kind = getattr(getattr(symbol, "kind", None), "name", type(symbol).__name__)
+    key = (kind, path, location["path"] if location else None)
+    if key in seen:
+        return None
+    seen.add(key)
+    payload: dict[str, JsonValue] = {
+        "name": getattr(symbol, "name", None),
+        "kind": kind,
+        "hierarchical_path": path,
+        "lexical_path": str(getattr(symbol, "lexicalPath", getattr(symbol, "name", ""))),
+        "location": location,
+    }
+    return SearchIndexEntry(
+        candidates=_normalized_candidates(
+            {
+                getattr(symbol, "name", None),
+                path,
+                str(getattr(symbol, "lexicalPath", getattr(symbol, "name", ""))),
+            }
+        ),
+        payload=payload,
+    )
+
+
+def _collect_reference_entries(
+    *,
+    bundle: AnalysisBundle,
+    symbol: Any,
     seen: set[tuple[str, str, str | None, str | None]],
-) -> list[dict[str, Any]]:
-    hits: list[dict[str, Any]] = []
+) -> list[SearchIndexEntry]:
+    entries: list[SearchIndexEntry] = []
     symbol_type_name = type(symbol).__name__
 
     if symbol_type_name == "NamedValueExpression" and getattr(symbol, "symbol", None):
         referenced_symbol = symbol.symbol
-        if _matches_symbol(query=query, match_mode=match_mode, symbol=referenced_symbol):
-            hit = _make_reference_hit(
-                bundle=bundle,
-                source_kind="named_value",
-                target_symbol=referenced_symbol,
-                location=_serialize_range_location(bundle, symbol.sourceRange),
-                snippet=_source_snippet(bundle, symbol.sourceRange),
-                seen=seen,
-            )
-            if hit is not None:
-                hits.append(hit)
+        entry = _make_reference_entry(
+            bundle=bundle,
+            search_candidates=_symbol_search_candidates(referenced_symbol),
+            source_kind="named_value",
+            target_symbol=referenced_symbol,
+            location=_serialize_range_location(bundle, symbol.sourceRange),
+            snippet=_source_snippet(bundle, symbol.sourceRange),
+            seen=seen,
+        )
+        if entry is not None:
+            entries.append(entry)
 
     if symbol_type_name == "WildcardImportSymbol":
         package_name = getattr(symbol, "packageName", None)
-        if isinstance(package_name, str) and _matches_text(
-            query=query, match_mode=match_mode, candidates={package_name}
-        ):
-            hit = _make_reference_hit(
-                bundle=bundle,
-                source_kind="package_import",
-                target_symbol=getattr(symbol, "package", None) or symbol,
-                location=_serialize_location(bundle, getattr(symbol, "location", None)),
-                snippet=_source_snippet(bundle, getattr(symbol.syntax, "sourceRange", None)),
-                seen=seen,
-            )
-            if hit is not None:
-                hits.append(hit)
+        entry = _make_reference_entry(
+            bundle=bundle,
+            search_candidates={package_name},
+            source_kind="package_import",
+            target_symbol=getattr(symbol, "package", None) or symbol,
+            location=_serialize_location(bundle, getattr(symbol, "location", None)),
+            snippet=_source_snippet(bundle, getattr(symbol.syntax, "sourceRange", None)),
+            seen=seen,
+        )
+        if entry is not None:
+            entries.append(entry)
 
     if symbol_type_name == "InstanceSymbol":
         definition = getattr(symbol, "definition", None)
-        if definition is not None and _matches_symbol(
-            query=query, match_mode=match_mode, symbol=definition
-        ):
+        if definition is not None:
             location = _serialize_location(bundle, getattr(symbol, "location", None))
-            hit = _make_reference_hit(
+            entry = _make_reference_entry(
                 bundle=bundle,
+                search_candidates=_symbol_search_candidates(definition),
                 source_kind="instance_definition",
                 target_symbol=definition,
                 location=location,
                 snippet=_line_excerpt(bundle, location),
                 seen=seen,
             )
-            if hit is not None:
-                hits.append(hit)
+            if entry is not None:
+                entries.append(entry)
 
     declared_type = getattr(symbol, "declaredType", None)
     declared_type_syntax = getattr(declared_type, "typeSyntax", None)
@@ -719,36 +868,36 @@ def _collect_reference_hits(
             getattr(getattr(declared_type, "type", None), "canonicalType", "")
         )
         declared_type_text = _source_snippet(bundle, declared_type_syntax.sourceRange)
-        candidates = {
-            type_text,
-            declared_type_text,
-            _leaf_type_name(type_text),
-            _leaf_type_name(declared_type_text),
-        }
-        if _matches_text(query=query, match_mode=match_mode, candidates=candidates):
-            hit = _make_reference_hit(
-                bundle=bundle,
-                source_kind="declared_type",
-                target_symbol=symbol,
-                location=_serialize_location(bundle, getattr(symbol, "location", None)),
-                snippet=_source_snippet(bundle, declared_type_syntax.sourceRange),
-                seen=seen,
-            )
-            if hit is not None:
-                hits.append(hit)
+        entry = _make_reference_entry(
+            bundle=bundle,
+            search_candidates={
+                type_text,
+                declared_type_text,
+                _leaf_type_name(type_text),
+                _leaf_type_name(declared_type_text),
+            },
+            source_kind="declared_type",
+            target_symbol=symbol,
+            location=_serialize_location(bundle, getattr(symbol, "location", None)),
+            snippet=_source_snippet(bundle, declared_type_syntax.sourceRange),
+            seen=seen,
+        )
+        if entry is not None:
+            entries.append(entry)
 
-    return hits
+    return entries
 
 
-def _make_reference_hit(
+def _make_reference_entry(
     *,
     bundle: AnalysisBundle,
+    search_candidates: set[str | None],
     source_kind: str,
     target_symbol: Any,
     location: dict[str, Any] | None,
     snippet: str | None,
     seen: set[tuple[str, str, str | None, str | None]],
-) -> dict[str, Any] | None:
+) -> SearchIndexEntry | None:
     target_path = str(
         getattr(target_symbol, "hierarchicalPath", getattr(target_symbol, "name", ""))
     )
@@ -762,7 +911,7 @@ def _make_reference_hit(
     if key in seen:
         return None
     seen.add(key)
-    return {
+    payload: dict[str, JsonValue] = {
         "name": getattr(target_symbol, "name", None),
         "target_kind": target_kind.name
         if target_kind is not None
@@ -772,34 +921,44 @@ def _make_reference_hit(
         "location": location,
         "snippet": snippet,
     }
+    return SearchIndexEntry(
+        candidates=_normalized_candidates(
+            search_candidates
+            | {
+                getattr(target_symbol, "name", None),
+                target_path,
+            }
+        ),
+        payload=payload,
+    )
 
 
-def _maybe_add_declaration(
+def _add_exact_payload(
+    exact_index: defaultdict[str, list[dict[str, JsonValue]]],
+    entry: SearchIndexEntry,
+) -> None:
+    for candidate in entry.candidates:
+        exact_index[candidate].append(entry.payload)
+
+
+def _matching_index_payloads(
     *,
-    bundle: AnalysisBundle,
-    symbol: Any,
+    entries: tuple[SearchIndexEntry, ...],
+    exact_index: dict[str, tuple[dict[str, JsonValue], ...]],
     query: str,
     match_mode: MatchMode,
-    seen: set[tuple[str, str, str | None]],
-    target: list[dict[str, Any]],
-) -> None:
-    if not _matches_symbol(query=query, match_mode=match_mode, symbol=symbol):
-        return
-    location = _serialize_location(bundle, getattr(symbol, "location", None))
-    path = str(getattr(symbol, "hierarchicalPath", getattr(symbol, "name", "")))
-    key = (symbol.kind.name, path, location["path"] if location else None)
-    if key in seen:
-        return
-    seen.add(key)
-    target.append(
-        {
-            "name": getattr(symbol, "name", None),
-            "kind": symbol.kind.name,
-            "hierarchical_path": path,
-            "lexical_path": str(getattr(symbol, "lexicalPath", getattr(symbol, "name", ""))),
-            "location": location,
-        }
-    )
+) -> list[dict[str, JsonValue]]:
+    if match_mode == "exact":
+        return list(exact_index.get(query.lower(), ()))
+    return [
+        entry.payload
+        for entry in entries
+        if _matches_text(query=query, match_mode=match_mode, candidates=entry.candidates)
+    ]
+
+
+def _design_unit_syntax_json(bundle: AnalysisBundle, symbol: Any) -> dict[str, Any]:
+    return json.loads(symbol.syntax.to_json())
 
 
 def _collect_member_kinds(members: list[dict[str, Any]]) -> list[str]:

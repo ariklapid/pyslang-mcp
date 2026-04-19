@@ -27,6 +27,7 @@ def test_analysis_over_filelist_fixture() -> None:
 
     diagnostics = get_diagnostics(bundle)
     assert diagnostics["summary"]["total"] == 0
+    assert diagnostics["project_status"]["status"] == "ok"
 
     units = list_design_units(bundle)
     unit_names = {unit["name"] for unit in units["design_units"]}
@@ -77,6 +78,7 @@ def test_analysis_over_filelist_fixture() -> None:
     summary = get_project_summary(bundle, max_diagnostics=10, max_design_units=20)
     assert summary["summary"]["file_count"] == 3
     assert summary["limits"]["max_diagnostics"] == 10
+    assert summary["project_status"]["status"] == "ok"
 
 
 def test_diagnostics_on_broken_fixture() -> None:
@@ -90,3 +92,5 @@ def test_diagnostics_on_broken_fixture() -> None:
     assert diagnostics["summary"]["total"] == 1
     assert diagnostics["diagnostics"][0]["severity"] == "error"
     assert "missing_symbol" in diagnostics["diagnostics"][0]["message"]
+    assert diagnostics["project_status"]["status"] == "incomplete"
+    assert diagnostics["project_status"]["unresolved_references"] >= 1

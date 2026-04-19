@@ -60,7 +60,15 @@ class ParseSummary(StrictModel):
     diagnostic_severity_counts: dict[str, int]
 
 
+class ProjectStatus(StrictModel):
+    status: Literal["ok", "degraded", "incomplete"]
+    unresolved_references: int
+    diagnostic_count: int
+    error_count: int
+
+
 class ParseFilesResult(StrictModel):
+    project_status: ProjectStatus
     project: ProjectConfigSchema
     parse: ParseSummary
 
@@ -92,6 +100,7 @@ class DiagnosticsSummary(StrictModel):
 
 
 class DiagnosticsResult(StrictModel):
+    project_status: ProjectStatus
     project_root: str
     summary: DiagnosticsSummary
     diagnostics: list[DiagnosticEntry]
@@ -114,6 +123,7 @@ class DesignUnitListSummary(StrictModel):
 
 
 class ListDesignUnitsResult(StrictModel):
+    project_status: ProjectStatus
     summary: DesignUnitListSummary
     design_units: list[DesignUnitRecord]
 
@@ -137,6 +147,7 @@ class DesignUnitDescription(DesignUnitRecord):
 
 
 class DescribeDesignUnitResult(StrictModel):
+    project_status: ProjectStatus
     query: str
     found: bool
     ambiguous: bool
@@ -168,6 +179,7 @@ class HierarchySummary(StrictModel):
 
 
 class HierarchyResult(StrictModel):
+    project_status: ProjectStatus
     summary: HierarchySummary
     hierarchy: list[HierarchyNode]
 
@@ -197,6 +209,7 @@ class FindSymbolSummary(StrictModel):
 
 
 class FindSymbolResult(StrictModel):
+    project_status: ProjectStatus
     query: str
     match_mode: Literal["exact", "contains", "startswith"]
     declarations: list[SymbolDeclaration]
@@ -223,6 +236,7 @@ class SyntaxTreeSummaryMeta(StrictModel):
 
 
 class SyntaxTreeSummaryResult(StrictModel):
+    project_status: ProjectStatus
     summary: SyntaxTreeSummaryMeta
     files: list[SyntaxFileSummary]
 
@@ -239,6 +253,7 @@ class PreprocessSummary(StrictModel):
 
 
 class PreprocessFilesResult(StrictModel):
+    project_status: ProjectStatus
     mode: Literal["summary_only"]
     note: str
     summary: PreprocessSummary
@@ -254,6 +269,7 @@ class ProjectSummaryLimits(StrictModel):
 
 
 class ProjectSummaryResult(StrictModel):
+    project_status: ProjectStatus
     project: ProjectConfigSchema
     summary: ParseSummary
     diagnostics: DiagnosticsSummary

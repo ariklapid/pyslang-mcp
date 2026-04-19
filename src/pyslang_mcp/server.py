@@ -278,9 +278,6 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
             top_modules=top_modules,
         )
 
-    def analyze(project: ProjectConfig) -> Any:
-        return analysis_cache.get_or_build(project, lambda: build_analysis(project))
-
     def success_result(schema: type[SchemaT], payload: dict[str, Any]) -> CallToolResult:
         validated = schema.model_validate(payload)
         structured = validated.model_dump(mode="json", exclude_unset=True)
@@ -340,6 +337,26 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                 ),
             )
 
+    def run_project_tool(
+        schema: type[SchemaT],
+        *,
+        tool_name: str,
+        tool_args: dict[str, object] | None,
+        project_factory: Callable[[], ProjectConfig],
+        callback: Callable[[Any], dict[str, Any]],
+    ) -> CallToolResult:
+        def compute_payload() -> dict[str, Any]:
+            project = project_factory()
+            return analysis_cache.get_or_compute_tool_result(
+                project,
+                tool_name=tool_name,
+                tool_args=tool_args,
+                bundle_factory=lambda: build_analysis(project),
+                result_factory=callback,
+            )
+
+        return run_tool(schema, compute_payload)
+
     @mcp.tool(
         name="parse_files",
         annotations=READ_ONLY_ANNOTATIONS,
@@ -356,19 +373,18 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         defines: DefinesArg = None,
         top_modules: TopModulesArg = None,
     ) -> Annotated[CallToolResult, ParseFilesResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             ParseFilesResult,
-            lambda: parse_summary(
-                analyze(
-                    load_project_from_files(
-                        project_root=project_root,
-                        files=files,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                )
+            tool_name="parse_files",
+            tool_args={},
+            project_factory=lambda: load_project_from_files(
+                project_root=project_root,
+                files=files,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
             ),
+            callback=parse_summary,
         )
 
     @mcp.tool(
@@ -387,19 +403,18 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         defines: DefinesArg = None,
         top_modules: TopModulesArg = None,
     ) -> Annotated[CallToolResult, ParseFilelistResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             ParseFilelistResult,
-            lambda: filelist_summary(
-                analyze(
-                    load_project_from_filelist(
-                        project_root=project_root,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                )
+            tool_name="parse_filelist",
+            tool_args={},
+            project_factory=lambda: load_project_from_filelist(
+                project_root=project_root,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
             ),
+            callback=filelist_summary,
         )
 
     @mcp.tool(
@@ -420,21 +435,19 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         top_modules: TopModulesArg = None,
         max_items: MaxItemsArg = 200,
     ) -> Annotated[CallToolResult, DiagnosticsResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             DiagnosticsResult,
-            lambda: get_diagnostics_core(
-                analyze(
-                    resolve_project(
-                        project_root=project_root,
-                        files=files,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                ),
-                max_items=max_items,
+            tool_name="get_diagnostics",
+            tool_args={"max_items": max_items},
+            project_factory=lambda: resolve_project(
+                project_root=project_root,
+                files=files,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
             ),
+            callback=lambda bundle: get_diagnostics_core(bundle, max_items=max_items),
         )
 
     @mcp.tool(
@@ -455,21 +468,19 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         top_modules: TopModulesArg = None,
         max_items: MaxItemsArg = 200,
     ) -> Annotated[CallToolResult, ListDesignUnitsResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             ListDesignUnitsResult,
-            lambda: list_design_units_core(
-                analyze(
-                    resolve_project(
-                        project_root=project_root,
-                        files=files,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                ),
-                max_items=max_items,
+            tool_name="list_design_units",
+            tool_args={"max_items": max_items},
+            project_factory=lambda: resolve_project(
+                project_root=project_root,
+                files=files,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
             ),
+            callback=lambda bundle: list_design_units_core(bundle, max_items=max_items),
         )
 
     @mcp.tool(
@@ -491,21 +502,19 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         defines: DefinesArg = None,
         top_modules: TopModulesArg = None,
     ) -> Annotated[CallToolResult, DescribeDesignUnitResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             DescribeDesignUnitResult,
-            lambda: describe_design_unit_core(
-                analyze(
-                    resolve_project(
-                        project_root=project_root,
-                        files=files,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                ),
-                name=name,
+            tool_name="describe_design_unit",
+            tool_args={"name": name},
+            project_factory=lambda: resolve_project(
+                project_root=project_root,
+                files=files,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
             ),
+            callback=lambda bundle: describe_design_unit_core(bundle, name=name),
         )
 
     @mcp.tool(
@@ -527,19 +536,23 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         max_depth: MaxDepthArg = 8,
         max_children: MaxChildrenArg = 100,
     ) -> Annotated[CallToolResult, HierarchyResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             HierarchyResult,
-            lambda: get_hierarchy_core(
-                analyze(
-                    resolve_project(
-                        project_root=project_root,
-                        files=files,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                ),
+            tool_name="get_hierarchy",
+            tool_args={
+                "max_depth": max_depth,
+                "max_children": max_children,
+            },
+            project_factory=lambda: resolve_project(
+                project_root=project_root,
+                files=files,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
+            ),
+            callback=lambda bundle: get_hierarchy_core(
+                bundle,
                 max_depth=max_depth,
                 max_children=max_children,
             ),
@@ -567,19 +580,25 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         include_references: IncludeReferencesArg = True,
         max_results: MaxResultsArg = 100,
     ) -> Annotated[CallToolResult, FindSymbolResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             FindSymbolResult,
-            lambda: find_symbol_core(
-                analyze(
-                    resolve_project(
-                        project_root=project_root,
-                        files=files,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                ),
+            tool_name="find_symbol",
+            tool_args={
+                "query": query,
+                "match_mode": match_mode,
+                "include_references": include_references,
+                "max_results": max_results,
+            },
+            project_factory=lambda: resolve_project(
+                project_root=project_root,
+                files=files,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
+            ),
+            callback=lambda bundle: find_symbol_core(
+                bundle,
                 query=query,
                 match_mode=match_mode,
                 include_references=include_references,
@@ -606,19 +625,23 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         max_files: MaxFilesArg = 50,
         max_node_kinds: MaxNodeKindsArg = 40,
     ) -> Annotated[CallToolResult, SyntaxTreeSummaryResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             SyntaxTreeSummaryResult,
-            lambda: dump_syntax_tree_summary_core(
-                analyze(
-                    resolve_project(
-                        project_root=project_root,
-                        files=files,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                ),
+            tool_name="dump_syntax_tree_summary",
+            tool_args={
+                "max_files": max_files,
+                "max_node_kinds": max_node_kinds,
+            },
+            project_factory=lambda: resolve_project(
+                project_root=project_root,
+                files=files,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
+            ),
+            callback=lambda bundle: dump_syntax_tree_summary_core(
+                bundle,
                 max_files=max_files,
                 max_node_kinds=max_node_kinds,
             ),
@@ -643,19 +666,23 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         max_files: MaxFilesArg = 50,
         max_excerpt_lines: MaxExcerptLinesArg = 12,
     ) -> Annotated[CallToolResult, PreprocessFilesResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             PreprocessFilesResult,
-            lambda: preprocess_files_core(
-                analyze(
-                    resolve_project(
-                        project_root=project_root,
-                        files=files,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                ),
+            tool_name="preprocess_files",
+            tool_args={
+                "max_files": max_files,
+                "max_excerpt_lines": max_excerpt_lines,
+            },
+            project_factory=lambda: resolve_project(
+                project_root=project_root,
+                files=files,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
+            ),
+            callback=lambda bundle: preprocess_files_core(
+                bundle,
                 max_files=max_files,
                 max_excerpt_lines=max_excerpt_lines,
             ),
@@ -683,19 +710,25 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
         max_depth: SummaryDepthArg = 6,
         max_children: SummaryChildrenArg = 100,
     ) -> Annotated[CallToolResult, ProjectSummaryResult | ToolErrorResult]:
-        return run_tool(
+        return run_project_tool(
             ProjectSummaryResult,
-            lambda: get_project_summary_core(
-                analyze(
-                    resolve_project(
-                        project_root=project_root,
-                        files=files,
-                        filelist=filelist,
-                        include_dirs=include_dirs,
-                        defines=defines,
-                        top_modules=top_modules,
-                    )
-                ),
+            tool_name="get_project_summary",
+            tool_args={
+                "max_diagnostics": max_diagnostics,
+                "max_design_units": max_design_units,
+                "max_depth": max_depth,
+                "max_children": max_children,
+            },
+            project_factory=lambda: resolve_project(
+                project_root=project_root,
+                files=files,
+                filelist=filelist,
+                include_dirs=include_dirs,
+                defines=defines,
+                top_modules=top_modules,
+            ),
+            callback=lambda bundle: get_project_summary_core(
+                bundle,
                 max_diagnostics=max_diagnostics,
                 max_design_units=max_design_units,
                 max_depth=max_depth,
