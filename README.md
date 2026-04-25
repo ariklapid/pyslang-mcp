@@ -76,8 +76,8 @@ The implemented `.f` parser intentionally supports a practical subset:
 
 - raw source file entries
 - nested filelists with `-f` and `-F`
-- include directories with `+incdir+...` and `-I`
-- macro defines with `+define+...`
+- include directories with `+incdir+...`, `-I dir`, and `-Idir`
+- macro defines with `+define+...`, `-D NAME`, and `-DNAME`
 
 Unsupported directives are reported back in `pyslang_parse_filelist` output instead of
 being silently ignored.

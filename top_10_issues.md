@@ -23,36 +23,6 @@ refreshing the editable dev install:
 
 Observed test result: `20 passed`, `89%` total coverage.
 
-## 3. Filelist compatibility is still too fragile for real RTL repositories
-
-The filelist parser supports a useful subset, but common simulator forms are
-still not handled. For example, `-DDEBUG` and `-Iinclude` are currently treated
-as source files. Also, include directories discovered inside a nested filelist
-are normalized relative to `project_root`, not relative to the filelist that
-declared them.
-
-Evidence:
-
-- Supported token handling is in
-  [src/pyslang_mcp/project_loader.py](src/pyslang_mcp/project_loader.py)
-- README documents current filelist support as intentionally limited:
-  [README.md](README.md)
-- Tests cover only a narrow subset of filelist behavior:
-  [tests/test_project_loader.py](tests/test_project_loader.py)
-
-Why it matters:
-
-Real SystemVerilog projects often use filelists copied from simulators and
-build systems. If common flags become false source files or incorrect include
-paths, first-run experience fails before the semantic tools can help.
-
-Recommended fix:
-
-Add support or explicit reporting for common directives: `-D`, `-DNAME=VALUE`,
-`-DNAME VALUE`, `-Ipath`, `-I path`, `+incdir+` relative to declaring filelist,
-`+define+` variants, and common ignored simulator switches. Add compatibility
-fixtures for nested filelists and relative include directories.
-
 ## 4. Output limits are soft, not protective
 
 The tools expose limits, but most implementations collect or traverse the full
