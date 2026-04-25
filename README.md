@@ -436,6 +436,8 @@ Be honest — the MCP pays elaboration cost that plain text tools avoid.
 ### What Clients Should Expect Back
 
 - responses are JSON dictionaries
+- successful responses include `project_status` so degraded or incomplete
+  compiler state is visible outside the diagnostics tool
 - large result lists include truncation metadata
 - recoverable input problems return MCP tool errors with structured error payloads
 - `pyslang_describe_design_unit` returns `found` / `ambiguous` results instead

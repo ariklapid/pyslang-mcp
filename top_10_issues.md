@@ -23,34 +23,6 @@ refreshing the editable dev install:
 
 Observed test result: `20 passed`, `89%` total coverage.
 
-## 2. Broken or incomplete compilations are not visible in most outputs
-
-The plan says every response should expose `project_status` values such as
-`ok`, `degraded`, or `incomplete`, but the current schemas do not include this.
-On a broken fixture, diagnostics correctly show an unresolved identifier, while
-design-unit and hierarchy tools still return plausible but incomplete data.
-
-Evidence:
-
-- Result schemas lack a shared project status field:
-  [src/pyslang_mcp/schemas.py](src/pyslang_mcp/schemas.py)
-- The degraded-state requirement is documented in
-  [docs/coverage-plan.md](docs/coverage-plan.md)
-- The README warns that incomplete file sets can degrade downstream results:
-  [README.md](README.md)
-
-Why it matters:
-
-An agent can misread empty ports, empty references, or partial hierarchy as
-ground truth when the compiler is actually operating in a degraded state.
-
-Recommended fix:
-
-Add a shared `project_status` object to every successful tool result, with at
-least diagnostic counts, unresolved-reference/error counts, and a status enum.
-Add tests asserting that downstream semantic tools surface incomplete status on
-broken fixtures.
-
 ## 3. Filelist compatibility is still too fragile for real RTL repositories
 
 The filelist parser supports a useful subset, but common simulator forms are

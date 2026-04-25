@@ -87,6 +87,7 @@ def parse_summary(bundle: AnalysisBundle) -> dict[str, Any]:
 
     return stabilize_json(
         {
+            "project_status": _project_status(bundle),
             "project": project_config_json(bundle.project),
             "parse": _base_summary(bundle),
         }
@@ -98,6 +99,7 @@ def filelist_summary(bundle: AnalysisBundle) -> dict[str, Any]:
 
     return stabilize_json(
         {
+            "project_status": _project_status(bundle),
             "project": project_config_json(bundle.project),
             "parse": _base_summary(bundle),
             "filelist": {
@@ -129,6 +131,7 @@ def get_project_summary(
     units = list_design_units(bundle, max_items=max_design_units)
     hierarchy = get_hierarchy(bundle, max_depth=max_depth, max_children=max_children)
     summary = {
+        "project_status": _project_status(bundle),
         "project": project_config_json(bundle.project),
         "summary": _base_summary(bundle),
         "diagnostics": diagnostics["summary"],
@@ -158,6 +161,7 @@ def get_diagnostics(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[str
     )
     return stabilize_json(
         {
+            "project_status": _project_status(bundle),
             "project_root": bundle.project.project_root.as_posix(),
             "summary": {
                 "total": len(diagnostics),
@@ -178,6 +182,7 @@ def list_design_units(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[s
     type_counts = Counter(str(unit["kind"]) for unit in units)
     return stabilize_json(
         {
+            "project_status": _project_status(bundle),
             "summary": {
                 "total": len(units),
                 "by_kind": dict(sorted(type_counts.items())),
@@ -208,6 +213,7 @@ def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]
         ][:10]
         return stabilize_json(
             {
+                "project_status": _project_status(bundle),
                 "query": name,
                 "found": False,
                 "ambiguous": len(exact_matches) > 1,
@@ -226,6 +232,7 @@ def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]
     member_counts = Counter(_collect_member_kinds(syntax_json.get("members", [])))
     description = {
         "query": name,
+        "project_status": _project_status(bundle),
         "found": True,
         "ambiguous": False,
         "candidates": [],
@@ -283,6 +290,7 @@ def get_hierarchy(
     ]
     return stabilize_json(
         {
+            "project_status": _project_status(bundle),
             "summary": {
                 "top_instances": [node["hierarchical_path"] for node in hierarchy],
                 "total_instances": len(instance_records),
@@ -322,6 +330,7 @@ def find_symbol(
     limited_references, ref_truncation = limit_list(references, max_items=max_results)
     return stabilize_json(
         {
+            "project_status": _project_status(bundle),
             "query": query,
             "match_mode": match_mode,
             "declarations": limited_declarations,
@@ -374,6 +383,7 @@ def dump_syntax_tree_summary(
     limited_files, truncation = limit_list(file_summaries, max_items=max_files)
     return stabilize_json(
         {
+            "project_status": _project_status(bundle),
             "summary": {
                 "file_count": len(file_summaries),
                 "truncation": truncation,
@@ -412,6 +422,7 @@ def preprocess_files(
     limited_results, truncation = limit_list(results, max_items=max_files)
     return stabilize_json(
         {
+            "project_status": _project_status(bundle),
             "mode": "summary_only",
             "note": (
                 "This tool returns preprocessing metadata and source excerpts. "
@@ -439,6 +450,46 @@ def _base_summary(bundle: AnalysisBundle) -> dict[str, Any]:
         "top_module_count": len(bundle.project.top_modules),
         "diagnostic_count": len(diagnostics),
         "diagnostic_severity_counts": dict(sorted(severity_counts.items())),
+    }
+
+
+def _project_status(bundle: AnalysisBundle) -> dict[str, Any]:
+    diagnostics = list(bundle.compilation.getAllDiagnostics())
+    error_count = sum(1 for diagnostic in diagnostics if diagnostic.isError())
+    severity_counts: Counter[str] = Counter()
+    unresolved_references = 0
+    for diagnostic in diagnostics:
+        severity = bundle.diagnostic_engine.getSeverity(
+            diagnostic.code, diagnostic.location
+        ).name.lower()
+        severity_counts[severity] += 1
+        code_text = str(diagnostic.code).lower()
+        message = _format_diagnostic_message(bundle, diagnostic).lower()
+        if any(
+            marker in code_text or marker in message
+            for marker in (
+                "undeclared",
+                "unresolved",
+                "unknown module",
+                "unknown type",
+                "could not find",
+            )
+        ):
+            unresolved_references += 1
+
+    if unresolved_references:
+        status = "incomplete"
+    elif error_count:
+        status = "degraded"
+    else:
+        status = "ok"
+
+    return {
+        "status": status,
+        "diagnostic_count": len(diagnostics),
+        "error_count": error_count,
+        "warning_count": severity_counts.get("warning", 0),
+        "unresolved_references": unresolved_references,
     }
 
 

@@ -72,6 +72,7 @@ def test_parse_filelist_tool() -> None:
     )
 
     assert not is_error
+    assert payload["project_status"]["status"] == "ok"
     assert payload["parse"]["file_count"] == 3
     assert payload["filelist"]["filelists"] == ["project.f", "rtl.f"]
 
