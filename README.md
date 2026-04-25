@@ -505,6 +505,8 @@ product surface, not as an extension of the current local `stdio` mode.
 Current state:
 
 - local-first `stdio` server is implemented
+- local HTTP startup is experimental and intentionally gated behind an explicit
+  CLI opt-in; it is not a secure hosted mode
 - hosted multi-user deployment is not implemented yet
 
 Recommended hosted direction:

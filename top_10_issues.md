@@ -23,32 +23,6 @@ refreshing the editable dev install:
 
 Observed test result: `20 passed`, `89%` total coverage.
 
-## 5. HTTP transport is exposed before the security model exists
-
-The CLI exposes `--transport streamable-http` and starts a local HTTP server,
-but the docs state hosted mode is design-only and should not be treated as just
-exposing the local process over the network.
-
-Evidence:
-
-- CLI accepts `streamable-http`:
-  [src/pyslang_mcp/__main__.py](src/pyslang_mcp/__main__.py)
-- Hosted deployment docs explicitly require auth, authorization, and workspace
-  isolation before remote use: [REMOTE_DEPLOYMENT.md](REMOTE_DEPLOYMENT.md)
-
-Why it matters:
-
-Even though FastMCP binds locally by default in current testing, advertising an
-HTTP transport before auth, workspace identity, request limits, and audit
-logging exist creates a risky product signal.
-
-Recommended fix:
-
-Hide or mark HTTP transport as experimental behind an explicit flag until the
-workspace-scoped design exists. For any HTTP mode, add auth hooks, workspace
-root mapping, rate limits, request size limits, timeout controls, and audit
-logging.
-
 ## 6. Tool error handling is incomplete
 
 The central `run_tool` wrapper catches invalid argument combinations and project
