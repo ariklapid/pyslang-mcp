@@ -27,6 +27,10 @@ def test_analysis_over_filelist_fixture() -> None:
         filelist="project.f",
     )
     bundle = build_analysis(project)
+    assert bundle.index is not None
+    assert bundle.index.design_unit_records
+    assert bundle.index.declarations
+    assert bundle.index.references
 
     diagnostics = get_diagnostics(bundle)
     assert diagnostics["summary"]["total"] == 0
@@ -40,6 +44,7 @@ def test_analysis_over_filelist_fixture() -> None:
     assert description["design_unit"]["ports"][0]["name"] == "clk"
     assert description["design_unit"]["child_instances"][0]["name"] == "u_child"
     assert "payload" in description["design_unit"]["declared_names"]
+    assert bundle.index.design_unit_description_cache
 
     missing_description = describe_design_unit(bundle, name="missing_top")
     assert missing_description["found"] is False
@@ -52,6 +57,7 @@ def test_analysis_over_filelist_fixture() -> None:
     symbol_hits = find_symbol(bundle, query="payload", include_references=True)
     assert symbol_hits["summary"]["declaration_count"] >= 1
     assert symbol_hits["summary"]["reference_count"] >= 1
+    assert find_symbol(bundle, query="payload", include_references=True) == symbol_hits
 
     type_hits = find_symbol(bundle, query="data_t", include_references=True)
     assert type_hits["summary"]["declaration_count"] >= 1

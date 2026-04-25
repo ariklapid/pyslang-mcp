@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -26,7 +27,13 @@ from .serializers import (
     stabilize_json,
     top_counts,
 )
-from .types import AnalysisBundle, ProjectConfig
+from .types import (
+    AnalysisBundle,
+    AnalysisIndex,
+    IndexedDeclaration,
+    IndexedReference,
+    ProjectConfig,
+)
 
 MatchMode = Literal["exact", "contains", "startswith"]
 
@@ -62,7 +69,7 @@ def build_analysis(project: ProjectConfig) -> AnalysisBundle:
         compilation.addSyntaxTree(tree)
 
     tracked_paths = _tracked_paths(project, source_manager)
-    return AnalysisBundle(
+    bundle = AnalysisBundle(
         project=project,
         source_manager=source_manager,
         bag=bag,
@@ -71,6 +78,8 @@ def build_analysis(project: ProjectConfig) -> AnalysisBundle:
         diagnostic_engine=DiagnosticEngine(source_manager),
         tracked_paths=tracked_paths,
     )
+    bundle.index = _build_index(bundle)
+    return bundle
 
 
 def parse_summary(bundle: AnalysisBundle) -> dict[str, Any]:
@@ -163,14 +172,7 @@ def get_diagnostics(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[str
 def list_design_units(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[str, Any]:
     """List project-local modules, interfaces, and packages."""
 
-    units = [
-        unit
-        for unit in (
-            _serialize_design_unit_record(bundle, symbol)
-            for symbol in sorted(_design_unit_symbols(bundle), key=lambda item: item.name)
-        )
-        if unit is not None
-    ]
+    units = list(_analysis_index(bundle).design_unit_records)
 
     units_json, truncation = limit_list(units, max_items=max_items)
     type_counts = Counter(str(unit["kind"]) for unit in units)
@@ -189,14 +191,8 @@ def list_design_units(bundle: AnalysisBundle, *, max_items: int = 200) -> dict[s
 def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]:
     """Describe a single project-local design unit by exact name."""
 
-    local_records = [
-        unit
-        for unit in (
-            _serialize_design_unit_record(bundle, symbol)
-            for symbol in sorted(_design_unit_symbols(bundle), key=lambda item: item.name)
-        )
-        if unit is not None
-    ]
+    index = _analysis_index(bundle)
+    local_records = list(index.design_unit_records)
     exact_matches = [record for record in local_records if record["name"] == name]
     if len(exact_matches) != 1:
         suggestions = [
@@ -221,11 +217,11 @@ def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]
         )
 
     selected_path = str(exact_matches[0]["hierarchical_path"])
-    symbol = next(
-        unit
-        for unit in _design_unit_symbols(bundle)
-        if unit.name == name and str(unit.hierarchicalPath) == selected_path
-    )
+    cached = index.design_unit_description_cache.get(selected_path)
+    if cached is not None:
+        return stabilize_json(cached)
+
+    symbol = index.design_unit_symbols_by_key[(name, selected_path)]
     syntax_json = json.loads(symbol.syntax.to_json())
     member_counts = Counter(_collect_member_kinds(syntax_json.get("members", [])))
     description = {
@@ -247,7 +243,9 @@ def describe_design_unit(bundle: AnalysisBundle, *, name: str) -> dict[str, Any]
             "instance_count": getattr(symbol, "instanceCount", None),
         },
     }
-    return stabilize_json(description)
+    stable = stabilize_json(description)
+    index.design_unit_description_cache[selected_path] = stable
+    return stable
 
 
 def get_hierarchy(
@@ -258,21 +256,16 @@ def get_hierarchy(
 ) -> dict[str, Any]:
     """Return the elaborated instance hierarchy from `root.topInstances`."""
 
-    instance_map: dict[str, Any] = {}
-    children_map: defaultdict[str | None, list[str]] = defaultdict(list)
-    for instance in _collect_instances(bundle):
-        path = str(instance.hierarchicalPath)
-        instance_map[path] = instance
-        parent = path.rsplit(".", 1)[0] if "." in path else None
-        children_map[parent].append(path)
-
-    for values in children_map.values():
-        values.sort()
+    index = _analysis_index(bundle)
+    instance_records = index.instance_records_by_path
+    children_map = index.children_by_parent
 
     def build_node(path: str, depth: int) -> dict[str, Any]:
-        instance = instance_map[path]
         child_paths = children_map.get(path, [])
-        node = _serialize_instance(bundle, instance)
+        node = {
+            **instance_records[path],
+            "port_connections": list(instance_records[path]["port_connections"]),
+        }
         if depth >= max_depth:
             if child_paths:
                 node["children"] = []
@@ -285,15 +278,14 @@ def get_hierarchy(
             node["truncated_children"] = len(child_paths) - len(limited_children)
         return node
 
-    top_paths = [
-        str(instance.hierarchicalPath) for instance in bundle.compilation.getRoot().topInstances
+    hierarchy = [
+        build_node(path, depth=1) for path in index.top_instance_paths if path in instance_records
     ]
-    hierarchy = [build_node(path, depth=1) for path in top_paths if path in instance_map]
     return stabilize_json(
         {
             "summary": {
                 "top_instances": [node["hierarchical_path"] for node in hierarchy],
-                "total_instances": len(instance_map),
+                "total_instances": len(instance_records),
                 "max_depth_requested": max_depth,
             },
             "hierarchy": hierarchy,
@@ -311,46 +303,21 @@ def find_symbol(
 ) -> dict[str, Any]:
     """Find declarations and references matching a symbol name or hierarchical path."""
 
-    declarations: list[dict[str, Any]] = []
-    references: list[dict[str, Any]] = []
-    seen_declarations: set[tuple[str, str, str | None]] = set()
-    seen_references: set[tuple[str, str, str | None, str | None]] = set()
-
-    for symbol in _design_unit_symbols(bundle):
-        _maybe_add_declaration(
-            bundle=bundle,
-            symbol=symbol,
-            query=query,
-            match_mode=match_mode,
-            seen=seen_declarations,
-            target=declarations,
-        )
-
-    def visit(symbol: Any) -> bool:
-        if include_references:
-            references.extend(
-                _collect_reference_hits(
-                    bundle=bundle,
-                    symbol=symbol,
-                    query=query,
-                    match_mode=match_mode,
-                    seen=seen_references,
-                )
-            )
-        if getattr(symbol, "kind", None) and symbol.kind.name == "NamedValue":
-            return True
-        if getattr(symbol, "name", None):
-            _maybe_add_declaration(
-                bundle=bundle,
-                symbol=symbol,
-                query=query,
-                match_mode=match_mode,
-                seen=seen_declarations,
-                target=declarations,
-            )
-        return True
-
-    bundle.compilation.getRoot().visit(visit)
+    index = _analysis_index(bundle)
+    declarations = [
+        entry.output
+        for entry in index.declarations
+        if _matches_text(query=query, match_mode=match_mode, candidates=entry.candidates)
+    ]
+    references = (
+        [
+            entry.output
+            for entry in index.references
+            if _matches_text(query=query, match_mode=match_mode, candidates=entry.candidates)
+        ]
+        if include_references
+        else []
+    )
     limited_declarations, decl_truncation = limit_list(declarations, max_items=max_results)
     limited_references, ref_truncation = limit_list(references, max_items=max_results)
     return stabilize_json(
@@ -477,6 +444,93 @@ def _base_summary(bundle: AnalysisBundle) -> dict[str, Any]:
 
 def _design_unit_symbols(bundle: AnalysisBundle) -> list[Any]:
     return [*bundle.compilation.getDefinitions(), *bundle.compilation.getPackages()]
+
+
+def _analysis_index(bundle: AnalysisBundle) -> AnalysisIndex:
+    if bundle.index is None:
+        bundle.index = _build_index(bundle)
+    return bundle.index
+
+
+def _build_index(bundle: AnalysisBundle) -> AnalysisIndex:
+    """Build the warm-query index for a compiled project."""
+
+    design_units = tuple(
+        sorted(
+            _design_unit_symbols(bundle),
+            key=lambda item: (str(getattr(item, "name", "")), str(item.hierarchicalPath)),
+        )
+    )
+    design_unit_records: list[dict[str, Any]] = []
+    design_unit_symbols_by_key: dict[tuple[str, str], Any] = {}
+    declarations: list[IndexedDeclaration] = []
+    references: list[IndexedReference] = []
+    instances: list[Any] = []
+    instance_records_by_path: dict[str, dict[str, Any]] = {}
+    children_by_parent: defaultdict[str | None, list[str]] = defaultdict(list)
+    seen_declarations: set[tuple[str, str, str | None]] = set()
+    seen_references: set[tuple[str, str, str | None, str | None]] = set()
+
+    for symbol in design_units:
+        record = _serialize_design_unit_record(bundle, symbol)
+        if record is not None:
+            design_unit_records.append(record)
+            design_unit_symbols_by_key[(record["name"], record["hierarchical_path"])] = symbol
+        _maybe_add_indexed_declaration(
+            bundle=bundle,
+            symbol=symbol,
+            seen=seen_declarations,
+            target=declarations,
+        )
+
+    def visit(symbol: Any) -> bool:
+        kind = getattr(symbol, "kind", None)
+        if kind is not None and kind.name == "Instance":
+            path = str(symbol.hierarchicalPath)
+            instances.append(symbol)
+            instance_records_by_path[path] = _serialize_instance(bundle, symbol)
+            parent = path.rsplit(".", 1)[0] if "." in path else None
+            children_by_parent[parent].append(path)
+
+        references.extend(
+            _collect_reference_index_entries(
+                bundle=bundle,
+                symbol=symbol,
+                seen=seen_references,
+            )
+        )
+
+        if kind is not None and kind.name == "NamedValue":
+            return True
+        if getattr(symbol, "name", None):
+            _maybe_add_indexed_declaration(
+                bundle=bundle,
+                symbol=symbol,
+                seen=seen_declarations,
+                target=declarations,
+            )
+        return True
+
+    bundle.compilation.getRoot().visit(visit)
+
+    sorted_children = {
+        parent: tuple(sorted(child_paths)) for parent, child_paths in children_by_parent.items()
+    }
+    top_instance_paths = tuple(
+        str(instance.hierarchicalPath) for instance in bundle.compilation.getRoot().topInstances
+    )
+
+    return AnalysisIndex(
+        design_units=design_units,
+        design_unit_records=tuple(design_unit_records),
+        design_unit_symbols_by_key=design_unit_symbols_by_key,
+        instances=tuple(instances),
+        instance_records_by_path=instance_records_by_path,
+        children_by_parent=sorted_children,
+        top_instance_paths=top_instance_paths,
+        declarations=tuple(declarations),
+        references=tuple(references),
+    )
 
 
 def _serialize_diagnostic(bundle: AnalysisBundle, diagnostic: Any) -> dict[str, Any]:
@@ -619,12 +673,31 @@ def _source_snippet(bundle: AnalysisBundle, source_range: Any, *, limit: int = 8
 
 
 def _matches_symbol(query: str, match_mode: MatchMode, symbol: Any) -> bool:
-    candidates = {
-        getattr(symbol, "name", ""),
-        str(getattr(symbol, "hierarchicalPath", "")),
-        str(getattr(symbol, "lexicalPath", "")),
-    }
-    return _matches_text(query=query, match_mode=match_mode, candidates=candidates)
+    return _matches_text(query=query, match_mode=match_mode, candidates=_symbol_candidates(symbol))
+
+
+def _symbol_candidates(symbol: Any) -> tuple[str, ...]:
+    return _candidate_tuple(
+        (
+            getattr(symbol, "name", ""),
+            str(getattr(symbol, "hierarchicalPath", "")),
+            str(getattr(symbol, "lexicalPath", "")),
+        )
+    )
+
+
+def _candidate_tuple(candidates: Iterable[object | None]) -> tuple[str, ...]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        text = str(candidate)
+        if not text or text in seen:
+            continue
+        ordered.append(text)
+        seen.add(text)
+    return tuple(ordered)
 
 
 def _matches_text(query: str, match_mode: MatchMode, candidates: Any) -> bool:
@@ -654,63 +727,59 @@ def _leaf_type_name(value: str | None) -> str | None:
     return cleaned or None
 
 
-def _collect_reference_hits(
+def _collect_reference_index_entries(
     *,
     bundle: AnalysisBundle,
     symbol: Any,
-    query: str,
-    match_mode: MatchMode,
     seen: set[tuple[str, str, str | None, str | None]],
-) -> list[dict[str, Any]]:
-    hits: list[dict[str, Any]] = []
+) -> list[IndexedReference]:
+    entries: list[IndexedReference] = []
     symbol_type_name = type(symbol).__name__
 
     if symbol_type_name == "NamedValueExpression" and getattr(symbol, "symbol", None):
         referenced_symbol = symbol.symbol
-        if _matches_symbol(query=query, match_mode=match_mode, symbol=referenced_symbol):
-            hit = _make_reference_hit(
-                bundle=bundle,
-                source_kind="named_value",
-                target_symbol=referenced_symbol,
-                location=_serialize_range_location(bundle, symbol.sourceRange),
-                snippet=_source_snippet(bundle, symbol.sourceRange),
-                seen=seen,
-            )
-            if hit is not None:
-                hits.append(hit)
+        entry = _make_reference_index_entry(
+            bundle=bundle,
+            source_kind="named_value",
+            target_symbol=referenced_symbol,
+            location=_serialize_range_location(bundle, symbol.sourceRange),
+            snippet=_source_snippet(bundle, symbol.sourceRange),
+            candidates=_symbol_candidates(referenced_symbol),
+            seen=seen,
+        )
+        if entry is not None:
+            entries.append(entry)
 
     if symbol_type_name == "WildcardImportSymbol":
         package_name = getattr(symbol, "packageName", None)
-        if isinstance(package_name, str) and _matches_text(
-            query=query, match_mode=match_mode, candidates={package_name}
-        ):
-            hit = _make_reference_hit(
-                bundle=bundle,
-                source_kind="package_import",
-                target_symbol=getattr(symbol, "package", None) or symbol,
-                location=_serialize_location(bundle, getattr(symbol, "location", None)),
-                snippet=_source_snippet(bundle, getattr(symbol.syntax, "sourceRange", None)),
-                seen=seen,
-            )
-            if hit is not None:
-                hits.append(hit)
+        target_symbol = getattr(symbol, "package", None) or symbol
+        entry = _make_reference_index_entry(
+            bundle=bundle,
+            source_kind="package_import",
+            target_symbol=target_symbol,
+            location=_serialize_location(bundle, getattr(symbol, "location", None)),
+            snippet=_source_snippet(bundle, getattr(symbol.syntax, "sourceRange", None)),
+            candidates=(*_symbol_candidates(target_symbol), package_name),
+            seen=seen,
+        )
+        if entry is not None:
+            entries.append(entry)
 
     if symbol_type_name == "InstanceSymbol":
         definition = getattr(symbol, "definition", None)
-        if definition is not None and _matches_symbol(
-            query=query, match_mode=match_mode, symbol=definition
-        ):
+        if definition is not None:
             location = _serialize_location(bundle, getattr(symbol, "location", None))
-            hit = _make_reference_hit(
+            entry = _make_reference_index_entry(
                 bundle=bundle,
                 source_kind="instance_definition",
                 target_symbol=definition,
                 location=location,
                 snippet=_line_excerpt(bundle, location),
+                candidates=_symbol_candidates(definition),
                 seen=seen,
             )
-            if hit is not None:
-                hits.append(hit)
+            if entry is not None:
+                entries.append(entry)
 
     declared_type = getattr(symbol, "declaredType", None)
     declared_type_syntax = getattr(declared_type, "typeSyntax", None)
@@ -722,25 +791,59 @@ def _collect_reference_hits(
             getattr(getattr(declared_type, "type", None), "canonicalType", "")
         )
         declared_type_text = _source_snippet(bundle, declared_type_syntax.sourceRange)
-        candidates = {
-            type_text,
-            declared_type_text,
-            _leaf_type_name(type_text),
-            _leaf_type_name(declared_type_text),
-        }
-        if _matches_text(query=query, match_mode=match_mode, candidates=candidates):
-            hit = _make_reference_hit(
-                bundle=bundle,
-                source_kind="declared_type",
-                target_symbol=symbol,
-                location=_serialize_location(bundle, getattr(symbol, "location", None)),
-                snippet=_source_snippet(bundle, declared_type_syntax.sourceRange),
-                seen=seen,
-            )
-            if hit is not None:
-                hits.append(hit)
+        entry = _make_reference_index_entry(
+            bundle=bundle,
+            source_kind="declared_type",
+            target_symbol=symbol,
+            location=_serialize_location(bundle, getattr(symbol, "location", None)),
+            snippet=_source_snippet(bundle, declared_type_syntax.sourceRange),
+            candidates=(
+                *_symbol_candidates(symbol),
+                type_text,
+                declared_type_text,
+                _leaf_type_name(type_text),
+                _leaf_type_name(declared_type_text),
+            ),
+            seen=seen,
+        )
+        if entry is not None:
+            entries.append(entry)
 
-    return hits
+    return entries
+
+
+def _make_reference_index_entry(
+    *,
+    bundle: AnalysisBundle,
+    source_kind: str,
+    target_symbol: Any,
+    location: dict[str, Any] | None,
+    snippet: str | None,
+    candidates: Iterable[object | None],
+    seen: set[tuple[str, str, str | None, str | None]],
+) -> IndexedReference | None:
+    output = _make_reference_hit(
+        bundle=bundle,
+        source_kind=source_kind,
+        target_symbol=target_symbol,
+        location=location,
+        snippet=snippet,
+        seen=seen,
+    )
+    if output is None:
+        return None
+    return IndexedReference(
+        candidates=_candidate_tuple(
+            (
+                *candidates,
+                output.get("name"),
+                output.get("target_kind"),
+                output.get("target_path"),
+                output.get("reference_kind"),
+            )
+        ),
+        output=output,
+    )
 
 
 def _make_reference_hit(
@@ -777,32 +880,29 @@ def _make_reference_hit(
     }
 
 
-def _maybe_add_declaration(
+def _maybe_add_indexed_declaration(
     *,
     bundle: AnalysisBundle,
     symbol: Any,
-    query: str,
-    match_mode: MatchMode,
     seen: set[tuple[str, str, str | None]],
-    target: list[dict[str, Any]],
+    target: list[IndexedDeclaration],
 ) -> None:
-    if not _matches_symbol(query=query, match_mode=match_mode, symbol=symbol):
-        return
     location = _serialize_location(bundle, getattr(symbol, "location", None))
+    kind = getattr(symbol, "kind", None)
+    kind_name = kind.name if kind is not None else type(symbol).__name__
     path = str(getattr(symbol, "hierarchicalPath", getattr(symbol, "name", "")))
-    key = (symbol.kind.name, path, location["path"] if location else None)
+    key = (kind_name, path, location["path"] if location else None)
     if key in seen:
         return
     seen.add(key)
-    target.append(
-        {
-            "name": getattr(symbol, "name", None),
-            "kind": symbol.kind.name,
-            "hierarchical_path": path,
-            "lexical_path": str(getattr(symbol, "lexicalPath", getattr(symbol, "name", ""))),
-            "location": location,
-        }
-    )
+    output = {
+        "name": getattr(symbol, "name", None),
+        "kind": kind_name,
+        "hierarchical_path": path,
+        "lexical_path": str(getattr(symbol, "lexicalPath", getattr(symbol, "name", ""))),
+        "location": location,
+    }
+    target.append(IndexedDeclaration(candidates=_symbol_candidates(symbol), output=output))
 
 
 def _collect_member_kinds(members: list[dict[str, Any]]) -> list[str]:
