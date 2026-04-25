@@ -4,8 +4,10 @@ import asyncio
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
 from mcp.types import CallToolResult
 
+import pyslang_mcp.server as server_module
 from pyslang_mcp.cache import AnalysisCache
 from pyslang_mcp.server import MAX_LIST_ITEMS, MAX_SYMBOL_RESULTS, PUBLIC_TOOL_NAMES, create_server
 
@@ -136,3 +138,90 @@ def test_invalid_argument_combo_returns_structured_tool_error() -> None:
 
     assert is_error
     assert payload["error"]["code"] == "invalid_arguments"
+
+
+def test_invalid_match_mode_returns_structured_tool_error() -> None:
+    payload, is_error = _call_tool_json(
+        PUBLIC_TOOL_NAMES["find_symbol"],
+        {
+            "project_root": str(FIXTURES / "multi_file"),
+            "filelist": "project.f",
+            "query": "top",
+            "match_mode": "regex",
+        },
+    )
+
+    assert is_error
+    assert payload["error"]["code"] == "invalid_arguments"
+    assert "match_mode" in payload["error"]["message"]
+
+
+def test_limit_out_of_range_returns_structured_tool_error() -> None:
+    payload, is_error = _call_tool_json(
+        PUBLIC_TOOL_NAMES["get_diagnostics"],
+        {
+            "project_root": str(FIXTURES / "multi_file"),
+            "filelist": "project.f",
+            "max_items": MAX_LIST_ITEMS + 1,
+        },
+    )
+
+    assert is_error
+    assert payload["error"]["code"] == "invalid_arguments"
+    assert "max_items" in payload["error"]["message"]
+
+
+def test_empty_file_list_returns_structured_project_load_error() -> None:
+    payload, is_error = _call_tool_json(
+        PUBLIC_TOOL_NAMES["parse_files"],
+        {
+            "project_root": str(FIXTURES / "multi_file"),
+            "files": [],
+        },
+    )
+
+    assert is_error
+    assert payload["error"]["code"] == "project_load_error"
+
+
+def test_output_schema_failure_returns_structured_tool_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        server_module,
+        "get_diagnostics_core",
+        lambda *_args, **_kwargs: {"not": "a diagnostics result"},
+    )
+
+    payload, is_error = _call_tool_json(
+        PUBLIC_TOOL_NAMES["get_diagnostics"],
+        {
+            "project_root": str(FIXTURES / "multi_file"),
+            "filelist": "project.f",
+        },
+    )
+
+    assert is_error
+    assert payload["error"]["code"] == "internal_schema_error"
+    assert payload["error"]["details"]["error_count"] > 0
+
+
+def test_unexpected_analysis_failure_returns_structured_tool_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_runtime_error(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("synthetic pyslang failure")
+
+    monkeypatch.setattr(server_module, "build_analysis", raise_runtime_error)
+
+    payload, is_error = _call_tool_json(
+        PUBLIC_TOOL_NAMES["get_diagnostics"],
+        {
+            "project_root": str(FIXTURES / "multi_file"),
+            "filelist": "project.f",
+        },
+    )
+
+    assert is_error
+    assert payload["error"]["code"] == "analysis_error"
+    assert payload["error"]["details"] == {"error_type": "RuntimeError"}

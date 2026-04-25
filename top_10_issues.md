@@ -23,35 +23,6 @@ refreshing the editable dev install:
 
 Observed test result: `20 passed`, `89%` total coverage.
 
-## 6. Tool error handling is incomplete
-
-The central `run_tool` wrapper catches invalid argument combinations and project
-loader errors, but it does not catch validation errors from Pydantic, unexpected
-`pyslang` exceptions, serialization failures, or schema-validation regressions.
-Some invalid inputs can still surface as FastMCP `ToolError` exceptions instead
-of the structured error payload promised by the docs.
-
-Evidence:
-
-- `run_tool` catches only `ToolInputError`, `PathOutsideRootError`, and
-  `ProjectLoadError`: [src/pyslang_mcp/server.py](src/pyslang_mcp/server.py)
-- Structured error schemas exist but are only used for those cases:
-  [src/pyslang_mcp/schemas.py](src/pyslang_mcp/schemas.py)
-- README promises structured recoverable tool errors:
-  [README.md](README.md)
-
-Why it matters:
-
-Agents need actionable, predictable errors. Public clients should not see raw
-validation traces or framework exceptions for common bad input.
-
-Recommended fix:
-
-Add a broader error translation layer. Convert Pydantic validation issues,
-unsupported enum values, `pyslang` failures, Unicode/file-read failures, and
-internal schema mismatches into structured MCP tool errors with stable codes and
-hints. Keep internal details out of user-facing messages.
-
 ## 7. Release and public metadata are not ready
 
 The package can build a wheel, but public release plumbing and metadata are not

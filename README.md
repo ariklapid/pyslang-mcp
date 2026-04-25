@@ -440,7 +440,8 @@ Be honest — the MCP pays elaboration cost that plain text tools avoid.
 - successful responses include `project_status` so degraded or incomplete
   compiler state is visible outside the diagnostics tool
 - large result lists include truncation metadata
-- recoverable input problems return MCP tool errors with structured error payloads
+- recoverable input problems, including invalid limit values and unsupported
+  match modes, return MCP tool errors with structured error payloads
 - `pyslang_describe_design_unit` returns `found` / `ambiguous` results instead
   of throwing for normal lookup misses
 - `pyslang_preprocess_files` is summary-oriented; it does not claim to

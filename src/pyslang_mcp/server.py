@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any, TypeVar, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .analysis import MatchMode, build_analysis, filelist_summary, parse_summary
 from .analysis import describe_design_unit as describe_design_unit_core
@@ -86,7 +86,7 @@ FilesArg = Annotated[
             "Project-relative or absolute source file paths under `project_root`. Use this for "
             "explicit-file mode instead of `filelist`."
         ),
-        min_length=1,
+        json_schema_extra={"minItems": 1},
     ),
 ]
 OptionalFilesArg = Annotated[
@@ -168,13 +168,14 @@ SymbolQueryArg = Annotated[
     ),
 ]
 MatchModeArg = Annotated[
-    MatchMode,
+    str,
     Field(
         default="exact",
         description=(
             "Match mode for `query`: `exact` matches the full name or path, `contains` matches "
             "substrings, and `startswith` matches prefixes."
         ),
+        json_schema_extra={"enum": ["exact", "contains", "startswith"]},
     ),
 ]
 IncludeReferencesArg = Annotated[
@@ -191,107 +192,96 @@ MaxItemsArg = Annotated[
     int,
     Field(
         default=200,
-        ge=0,
-        le=MAX_LIST_ITEMS,
         description="Maximum number of list items to return before truncation.",
+        json_schema_extra={"minimum": 0, "maximum": MAX_LIST_ITEMS},
     ),
 ]
 MaxResultsArg = Annotated[
     int,
     Field(
         default=100,
-        ge=0,
-        le=MAX_SYMBOL_RESULTS,
         description="Maximum declaration hits and maximum reference hits to return.",
+        json_schema_extra={"minimum": 0, "maximum": MAX_SYMBOL_RESULTS},
     ),
 ]
 MaxDepthArg = Annotated[
     int,
     Field(
         default=8,
-        ge=1,
-        le=MAX_HIERARCHY_DEPTH,
         description="Maximum hierarchy depth to expand from each top instance.",
+        json_schema_extra={"minimum": 1, "maximum": MAX_HIERARCHY_DEPTH},
     ),
 ]
 MaxChildrenArg = Annotated[
     int,
     Field(
         default=100,
-        ge=0,
-        le=MAX_HIERARCHY_CHILDREN,
         description="Maximum child instances to return per hierarchy node.",
+        json_schema_extra={"minimum": 0, "maximum": MAX_HIERARCHY_CHILDREN},
     ),
 ]
 MaxFilesArg = Annotated[
     int,
     Field(
         default=50,
-        ge=0,
-        le=MAX_SUMMARY_FILES,
         description="Maximum number of files to summarize before truncation.",
+        json_schema_extra={"minimum": 0, "maximum": MAX_SUMMARY_FILES},
     ),
 ]
 MaxNodeKindsArg = Annotated[
     int,
     Field(
         default=40,
-        ge=0,
-        le=MAX_NODE_KINDS,
         description="Maximum distinct syntax node kinds to keep per file summary.",
+        json_schema_extra={"minimum": 0, "maximum": MAX_NODE_KINDS},
     ),
 ]
 MaxExcerptLinesArg = Annotated[
     int,
     Field(
         default=12,
-        ge=0,
-        le=MAX_EXCERPT_LINES,
         description="Maximum number of leading source lines to include per file excerpt.",
+        json_schema_extra={"minimum": 0, "maximum": MAX_EXCERPT_LINES},
     ),
 ]
 MaxSummaryDiagnosticsArg = Annotated[
     int,
     Field(
         default=50,
-        ge=0,
-        le=MAX_LIST_ITEMS,
         description=(
             f"Maximum diagnostics to fold into `{PUBLIC_TOOL_NAMES['get_project_summary']}`."
         ),
+        json_schema_extra={"minimum": 0, "maximum": MAX_LIST_ITEMS},
     ),
 ]
 MaxSummaryUnitsArg = Annotated[
     int,
     Field(
         default=200,
-        ge=0,
-        le=MAX_LIST_ITEMS,
         description=(
             f"Maximum design units to fold into `{PUBLIC_TOOL_NAMES['get_project_summary']}`."
         ),
+        json_schema_extra={"minimum": 0, "maximum": MAX_LIST_ITEMS},
     ),
 ]
 SummaryDepthArg = Annotated[
     int,
     Field(
         default=6,
-        ge=1,
-        le=MAX_HIERARCHY_DEPTH,
         description=(
             f"Maximum hierarchy depth to fold into `{PUBLIC_TOOL_NAMES['get_project_summary']}`."
         ),
+        json_schema_extra={"minimum": 1, "maximum": MAX_HIERARCHY_DEPTH},
     ),
 ]
 SummaryChildrenArg = Annotated[
     int,
     Field(
         default=100,
-        ge=0,
-        le=MAX_HIERARCHY_CHILDREN,
         description=(
             f"Maximum child instances per node in `{PUBLIC_TOOL_NAMES['get_project_summary']}`."
         ),
+        json_schema_extra={"minimum": 0, "maximum": MAX_HIERARCHY_CHILDREN},
     ),
 ]
 
@@ -337,6 +327,19 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
 
     def analyze(project: ProjectConfig) -> Any:
         return analysis_cache.get_or_build(project, lambda: build_analysis(project))
+
+    def bounded_int(name: str, value: int, *, minimum: int, maximum: int) -> int:
+        if value < minimum or value > maximum:
+            raise ToolInputError(f"`{name}` must be between {minimum} and {maximum}.")
+        return value
+
+    def validate_match_mode(match_mode: str) -> MatchMode:
+        valid_modes = {"exact", "contains", "startswith"}
+        if match_mode not in valid_modes:
+            raise ToolInputError(
+                "`match_mode` must be one of `exact`, `contains`, or `startswith`."
+            )
+        return cast(MatchMode, match_mode)
 
     def success_result(schema: type[SchemaT], payload: dict[str, Any]) -> CallToolResult:
         validated = schema.model_validate(payload)
@@ -395,6 +398,36 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                     "Verify the project root, filelist entries, include directories, "
                     "and source file paths."
                 ),
+            )
+        except UnicodeDecodeError:
+            return error_result(
+                code="file_read_error",
+                message="Could not read a requested file as UTF-8.",
+                hint="Check that project files and filelists are text files encoded as UTF-8.",
+            )
+        except OSError as exc:
+            return error_result(
+                code="file_read_error",
+                message="Could not read a requested file.",
+                hint="Verify that the file exists, is readable, and is not a directory.",
+                details={"error_type": type(exc).__name__},
+            )
+        except ValidationError as exc:
+            return error_result(
+                code="internal_schema_error",
+                message="Tool produced a result that did not match its declared schema.",
+                hint="Please report this as a pyslang-mcp bug with the tool name and inputs.",
+                details={"error_count": len(exc.errors())},
+            )
+        except Exception as exc:
+            return error_result(
+                code="analysis_error",
+                message="Analysis failed while running the tool.",
+                hint=(
+                    "Run diagnostics first and verify the file set, include directories, "
+                    "defines, and top-module selection."
+                ),
+                details={"error_type": type(exc).__name__},
             )
 
     @mcp.tool(
@@ -490,7 +523,12 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                         top_modules=top_modules,
                     )
                 ),
-                max_items=max_items,
+                max_items=bounded_int(
+                    "max_items",
+                    max_items,
+                    minimum=0,
+                    maximum=MAX_LIST_ITEMS,
+                ),
             ),
         )
 
@@ -526,7 +564,12 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                         top_modules=top_modules,
                     )
                 ),
-                max_items=max_items,
+                max_items=bounded_int(
+                    "max_items",
+                    max_items,
+                    minimum=0,
+                    maximum=MAX_LIST_ITEMS,
+                ),
             ),
         )
 
@@ -599,8 +642,18 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                         top_modules=top_modules,
                     )
                 ),
-                max_depth=max_depth,
-                max_children=max_children,
+                max_depth=bounded_int(
+                    "max_depth",
+                    max_depth,
+                    minimum=1,
+                    maximum=MAX_HIERARCHY_DEPTH,
+                ),
+                max_children=bounded_int(
+                    "max_children",
+                    max_children,
+                    minimum=0,
+                    maximum=MAX_HIERARCHY_CHILDREN,
+                ),
             ),
         )
 
@@ -640,9 +693,14 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                     )
                 ),
                 query=query,
-                match_mode=match_mode,
+                match_mode=validate_match_mode(match_mode),
                 include_references=include_references,
-                max_results=max_results,
+                max_results=bounded_int(
+                    "max_results",
+                    max_results,
+                    minimum=0,
+                    maximum=MAX_SYMBOL_RESULTS,
+                ),
             ),
         )
 
@@ -678,8 +736,18 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                         top_modules=top_modules,
                     )
                 ),
-                max_files=max_files,
-                max_node_kinds=max_node_kinds,
+                max_files=bounded_int(
+                    "max_files",
+                    max_files,
+                    minimum=0,
+                    maximum=MAX_SUMMARY_FILES,
+                ),
+                max_node_kinds=bounded_int(
+                    "max_node_kinds",
+                    max_node_kinds,
+                    minimum=0,
+                    maximum=MAX_NODE_KINDS,
+                ),
             ),
         )
 
@@ -715,8 +783,18 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                         top_modules=top_modules,
                     )
                 ),
-                max_files=max_files,
-                max_excerpt_lines=max_excerpt_lines,
+                max_files=bounded_int(
+                    "max_files",
+                    max_files,
+                    minimum=0,
+                    maximum=MAX_SUMMARY_FILES,
+                ),
+                max_excerpt_lines=bounded_int(
+                    "max_excerpt_lines",
+                    max_excerpt_lines,
+                    minimum=0,
+                    maximum=MAX_EXCERPT_LINES,
+                ),
             ),
         )
 
@@ -755,10 +833,30 @@ def create_server(cache: AnalysisCache | None = None) -> FastMCP:
                         top_modules=top_modules,
                     )
                 ),
-                max_diagnostics=max_diagnostics,
-                max_design_units=max_design_units,
-                max_depth=max_depth,
-                max_children=max_children,
+                max_diagnostics=bounded_int(
+                    "max_diagnostics",
+                    max_diagnostics,
+                    minimum=0,
+                    maximum=MAX_LIST_ITEMS,
+                ),
+                max_design_units=bounded_int(
+                    "max_design_units",
+                    max_design_units,
+                    minimum=0,
+                    maximum=MAX_LIST_ITEMS,
+                ),
+                max_depth=bounded_int(
+                    "max_depth",
+                    max_depth,
+                    minimum=1,
+                    maximum=MAX_HIERARCHY_DEPTH,
+                ),
+                max_children=bounded_int(
+                    "max_children",
+                    max_children,
+                    minimum=0,
+                    maximum=MAX_HIERARCHY_CHILDREN,
+                ),
             ),
         )
 
