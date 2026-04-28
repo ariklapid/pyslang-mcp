@@ -24,7 +24,7 @@ tight and technically honest.
 
 ## Current Repo Reality
 
-As of 2026-04-19, this repo has moved past the documentation-only stage into an
+As of 2026-04-28, this repo has moved past the documentation-only stage into an
 alpha local implementation.
 
 What exists:
@@ -37,11 +37,12 @@ What exists:
 - `src/pyslang_mcp/`
 - `tests/` with fixture-backed coverage
 - `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
 - a local `.venv/` used for research and validation on this machine only
 
 What does not exist yet:
 
-- publish automation
+- PyPI Trusted Publisher configuration
 - PyPI release artifacts
 - MCP Registry publication
 - copy-paste client configuration examples for multiple MCP clients
@@ -149,6 +150,8 @@ The repository now contains:
 - in-memory cache keyed by project config plus tracked file mtimes
 - fixture-backed unit, integration, and MCP-level tests
 - CI on GitHub Actions for Ubuntu with Python 3.11 and 3.12
+- package smoke CI from a built wheel
+- PyPI Trusted Publishing workflow for the first alpha release
 
 The implemented V1 tools match the intended tool list, with one important
 honesty constraint:
@@ -205,8 +208,7 @@ Implication:
 
 The major local implementation pieces now exist. The main remaining work is:
 
-- release automation
-- PyPI publishing
+- PyPI Trusted Publisher configuration and first publish
 - MCP Registry publication
 - real client configuration examples and docs
 - broader real-world fixture coverage
@@ -297,8 +299,8 @@ If you are picking this up fresh, do this next:
    include-dir patterns, and broken multi-file projects.
 2. Harden and document filelist compatibility boundaries.
 3. Add client setup examples for local `stdio` use.
-4. Add publish automation only after the response schemas and package surface
-   are considered stable enough for a first alpha release.
+4. Create the PyPI pending Trusted Publisher for `.github/workflows/release.yml`
+   with the `pypi` environment, then publish `v0.1.0a1`.
 5. Keep README and this file aligned with the true implementation status.
 
 ## Working Style

@@ -1,6 +1,6 @@
 # pyslang-mcp
 
-[![CI](https://github.com/asicdesign-ai/pyslang-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/asicdesign-ai/pyslang-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/ariklapid/pyslang-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ariklapid/pyslang-mcp/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 ![Transport](https://img.shields.io/badge/transport-stdio-informational)
@@ -22,8 +22,9 @@ RTL refactoring tool. It is a small semantic analysis service for local HDL
 checkouts.
 
 > [!NOTE]
-> The project is currently alpha. The server runs locally from a checkout, but
-> it has not been published to PyPI or the MCP Registry yet.
+> The project is currently alpha. The package and release workflow are prepared
+> for the first PyPI alpha, but it has not been published to PyPI or the MCP
+> Registry yet. Until then, use the checkout install below.
 
 ## Why ASIC And EDA Engineers Might Care
 
@@ -50,7 +51,7 @@ Good fits:
 Clone the repo and install it in editable mode:
 
 ```bash
-git clone https://github.com/asicdesign-ai/pyslang-mcp.git
+git clone https://github.com/ariklapid/pyslang-mcp.git
 cd pyslang-mcp
 python -m venv .venv
 ./.venv/bin/pip install -e '.[dev]'
@@ -229,12 +230,13 @@ Implemented:
   syntax summaries, and project summaries
 - bounded in-memory cache
 - fixture-backed tests and Ubuntu CI for Python 3.11 and 3.12
+- package smoke CI from a built wheel
+- PyPI Trusted Publishing release workflow
 
 Not done yet:
 
-- PyPI release
+- PyPI Trusted Publisher configuration and first release
 - MCP Registry publication
-- publish automation
 - schema freeze for a non-alpha release
 - broad platform validation beyond the current Linux-focused CI path
 

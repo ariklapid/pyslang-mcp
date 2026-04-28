@@ -25,14 +25,15 @@ Already in place:
 - macOS Python 3.12 CI for basic compatibility
 - stdio MCP protocol smoke in CI
 - HDL smoke validation on Ubuntu
+- package metadata for the first alpha release
+- wheel/sdist package smoke in CI
+- release workflow using PyPI Trusted Publishing
 
 Not yet in place:
 
 - PyPI project
-- PyPI Trusted Publisher
-- release workflow
-- wheel/sdist package smoke
-- release notes process
+- PyPI pending Trusted Publisher configuration
+- first published release
 - public install docs that assume PyPI availability
 
 ## Linux Feasibility
@@ -62,7 +63,7 @@ package may install elsewhere.
 
 ### 1. Polish package metadata
 
-Update `pyproject.toml` before release:
+Done in the repo for `0.1.0a1`:
 
 - add `authors`
 - add `maintainers` if different from authors
@@ -88,9 +89,9 @@ Keep the development status classifier as alpha for the first release:
 
 ### 2. Add package smoke CI
 
-Add a `package-smoke` job before publishing.
+Done in `.github/workflows/ci.yml`.
 
-It should:
+The `package-smoke` job:
 
 1. Build wheel and sdist from a clean checkout.
 2. Install the wheel in a fresh virtual environment.
@@ -100,7 +101,7 @@ It should:
 6. Run `tools/list`.
 7. Run one representative `tools/call`.
 
-Minimum command shape:
+Local command shape:
 
 ```bash
 python -m pip install --upgrade pip build
@@ -110,19 +111,19 @@ python -m venv /tmp/pyslang-mcp-wheel-smoke
 /tmp/pyslang-mcp-wheel-smoke/bin/pyslang-mcp --help
 ```
 
-The stdio portion can reuse the client helper pattern in
-`tests/test_mcp_stdio.py`, but point `command` at the installed console script.
+The stdio portion uses `scripts/package_smoke_stdio.py` and points `command` at
+the installed console script.
 
 ### 3. Add release workflow
 
-Create `.github/workflows/release.yml`.
+Done in `.github/workflows/release.yml`.
 
-Recommended trigger:
+Configured triggers:
 
 - `workflow_dispatch` for the first release
 - tags like `v*` after the first release process is proven
 
-The workflow should:
+The workflow:
 
 1. Check out the repository.
 2. Set up Python 3.12.
@@ -163,13 +164,7 @@ after creating it.
 
 ### 5. Decide first public version
 
-Current version:
-
-```toml
-version = "0.1.0a0"
-```
-
-Recommended first PyPI version:
+Selected first public alpha version:
 
 ```toml
 version = "0.1.0a1"
@@ -212,6 +207,7 @@ Before tagging:
 - `pytest`
 - `pytest -q tests/test_mcp_stdio.py`
 - `pytest -q tests/test_hdl_smoke.py`
+- `python -m build --wheel --sdist`
 - package smoke passes from a wheel install
 - README does not claim registry or hosted availability
 - changelog has release notes

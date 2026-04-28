@@ -90,3 +90,35 @@ jobs:
 
       - name: Run MCP stdio protocol smoke
         run: pytest -q tests/test_mcp_stdio.py
+
+  package-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --sdist
+
+      - name: Install wheel in fresh virtual environment
+        run: |
+          python -m venv /tmp/pyslang-mcp-wheel-smoke
+          /tmp/pyslang-mcp-wheel-smoke/bin/pip install --upgrade pip
+          /tmp/pyslang-mcp-wheel-smoke/bin/pip install dist/*.whl
+
+      - name: Check installed console script help
+        run: /tmp/pyslang-mcp-wheel-smoke/bin/pyslang-mcp --help
+
+      - name: Run installed MCP stdio smoke
+        run: |
+          /tmp/pyslang-mcp-wheel-smoke/bin/python scripts/package_smoke_stdio.py \
+            /tmp/pyslang-mcp-wheel-smoke/bin/pyslang-mcp \
+            --project-root "$PWD/tests/fixtures/multi_file"

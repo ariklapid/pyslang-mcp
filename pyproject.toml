@@ -4,10 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pyslang-mcp"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "Read-only MCP server for compiler-backed Verilog and SystemVerilog analysis using pyslang."
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Ariel Lapid" },
+]
+maintainers = [
+  { name = "Ariel Lapid" },
+]
 requires-python = ">=3.11"
 keywords = ["mcp", "model-context-protocol", "systemverilog", "verilog", "pyslang", "hdl"]
 classifiers = [
@@ -15,17 +22,26 @@ classifiers = [
   "Environment :: Console",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: Apache Software License",
+  "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
   "Topic :: Software Development :: Compilers",
+  "Typing :: Typed",
 ]
 dependencies = [
   "mcp>=1.27,<2",
   "pydantic>=2.8,<3",
   "pyslang>=10,<11",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ariklapid/pyslang-mcp"
+Repository = "https://github.com/ariklapid/pyslang-mcp"
+Issues = "https://github.com/ariklapid/pyslang-mcp/issues"
+Documentation = "https://github.com/ariklapid/pyslang-mcp#readme"
+Changelog = "https://github.com/ariklapid/pyslang-mcp/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
