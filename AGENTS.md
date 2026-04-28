@@ -42,13 +42,11 @@ What exists:
 
 What does not exist yet:
 
-- PyPI Trusted Publisher configuration
-- PyPI release artifacts
 - MCP Registry publication
 - copy-paste client configuration examples for multiple MCP clients
 
-Do not describe this repo as released or broadly client-ready. A runnable
-server now exists, but the project is still alpha and unpublished.
+Do not describe this repo as broadly client-ready. A PyPI alpha exists, but the
+project is still alpha and not MCP Registry published.
 
 ## Product Definition
 
@@ -208,7 +206,6 @@ Implication:
 
 The major local implementation pieces now exist. The main remaining work is:
 
-- PyPI Trusted Publisher configuration and first publish
 - MCP Registry publication
 - real client configuration examples and docs
 - broader real-world fixture coverage
@@ -273,7 +270,7 @@ Do the work in this order unless a strong reason emerges to change it.
 
 The first alpha should meet these standards:
 
-- installable with `uvx pyslang-mcp` or `pip install pyslang-mcp`
+- installable with `uvx pyslang-mcp` or `pip install --pre pyslang-mcp`
 - safe read-only behavior
 - useful on real multi-file SV projects
 - stable JSON outputs
@@ -299,8 +296,8 @@ If you are picking this up fresh, do this next:
    include-dir patterns, and broken multi-file projects.
 2. Harden and document filelist compatibility boundaries.
 3. Add client setup examples for local `stdio` use.
-4. Create the PyPI pending Trusted Publisher for `.github/workflows/release.yml`
-   with the `pypi` environment, then publish `v0.1.0a1`.
+4. Keep PyPI alpha install verification in the release checklist, especially
+   `pip install --pre pyslang-mcp` from a fresh environment.
 5. Keep README and this file aligned with the true implementation status.
 
 ## Working Style

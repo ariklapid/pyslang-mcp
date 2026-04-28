@@ -4,7 +4,7 @@ This plan tracks the work needed to make `pyslang-mcp` installable by anyone
 on Linux with:
 
 ```bash
-pip install pyslang-mcp
+pip install --pre pyslang-mcp
 ```
 
 The first public package should stay technically honest: local-first, stdio,
@@ -28,13 +28,13 @@ Already in place:
 - package metadata for the first alpha release
 - wheel/sdist package smoke in CI
 - release workflow using PyPI Trusted Publishing
+- PyPI project and active Trusted Publisher
+- public alpha release
 
 Not yet in place:
 
-- PyPI project
-- PyPI pending Trusted Publisher configuration
-- first published release
-- public install docs that assume PyPI availability
+- MCP Registry publication
+- non-alpha schema freeze
 
 ## Linux Feasibility
 
@@ -63,7 +63,7 @@ package may install elsewhere.
 
 ### 1. Polish package metadata
 
-Done in the repo for `0.1.0a1`:
+Done in the repo for the first alpha line:
 
 - add `authors`
 - add `maintainers` if different from authors
@@ -107,7 +107,7 @@ Local command shape:
 python -m pip install --upgrade pip build
 python -m build --wheel --sdist
 python -m venv /tmp/pyslang-mcp-wheel-smoke
-/tmp/pyslang-mcp-wheel-smoke/bin/pip install dist/*.whl
+/tmp/pyslang-mcp-wheel-smoke/bin/pip install --pre --no-cache-dir dist/*.whl
 /tmp/pyslang-mcp-wheel-smoke/bin/pyslang-mcp --help
 ```
 
@@ -145,10 +145,10 @@ Then use `pypa/gh-action-pypi-publish` without `username` or `password`.
 
 ### 4. Configure PyPI Trusted Publishing
 
-Because `pyslang-mcp` is not published yet, create a pending trusted publisher
-on PyPI.
+Done. The first upload consumed the pending publisher and created the active
+PyPI project.
 
-Suggested PyPI configuration:
+PyPI configuration:
 
 - PyPI project name: `pyslang-mcp`
 - GitHub owner: `ariklapid`
@@ -159,27 +159,27 @@ Suggested PyPI configuration:
 Using a GitHub environment is strongly recommended so publishing can require
 manual approval and can be restricted to trusted branches/tags.
 
-Important: a pending publisher does not reserve the package name. Publish soon
-after creating it.
+For future releases, keep the active publisher bound to the same workflow and
+environment.
 
 ### 5. Decide first public version
 
-Selected first public alpha version:
+Current public alpha version:
 
 ```toml
-version = "0.1.0a1"
+version = "0.1.0a2"
 ```
 
-Use an alpha version while schemas, docs, and client setup are still settling.
-Move to `0.1.0` only when the package surface is stable enough that normal
-users should install it without opting into pre-release semantics.
+`0.1.0a1` was the first upload. `0.1.0a2` supersedes it with an explicit
+`httpx` runtime bound so `pip install --pre pyslang-mcp` does not select
+incompatible `httpx` 1.0 development releases.
 
 ### 6. Update docs at release time
 
-After the package is live, update `README.md`:
+The package is live. Public install docs now use:
 
 ```bash
-pip install pyslang-mcp
+pip install --pre pyslang-mcp
 ```
 
 and:
@@ -216,8 +216,8 @@ Before tagging:
 Tag:
 
 ```bash
-git tag v0.1.0a1
-git push origin v0.1.0a1
+git tag v0.1.0a2
+git push origin v0.1.0a2
 ```
 
 Verify after publish:

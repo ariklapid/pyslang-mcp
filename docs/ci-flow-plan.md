@@ -127,7 +127,7 @@ Minimum command shape:
 python -m pip install build
 python -m build --wheel
 python -m venv /tmp/pyslang-mcp-wheel-smoke
-/tmp/pyslang-mcp-wheel-smoke/bin/pip install dist/*.whl
+/tmp/pyslang-mcp-wheel-smoke/bin/pip install --pre --no-cache-dir dist/*.whl
 /tmp/pyslang-mcp-wheel-smoke/bin/pyslang-mcp --help
 ```
 

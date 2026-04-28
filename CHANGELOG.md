@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.0a2 - 2026-04-28
+
+- Added an explicit `httpx>=0.27.1,<0.29` runtime bound so
+  `pip install --pre pyslang-mcp` does not resolve to incompatible `httpx` 1.0
+  development releases through transitive MCP dependencies.
+
 ## 0.1.0a1 - 2026-04-28
 
 - Added typed MCP tool result schemas and structured tool errors.

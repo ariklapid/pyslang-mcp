@@ -22,9 +22,9 @@ RTL refactoring tool. It is a small semantic analysis service for local HDL
 checkouts.
 
 > [!NOTE]
-> The project is currently alpha. The package and release workflow are prepared
-> for the first PyPI alpha, but it has not been published to PyPI or the MCP
-> Registry yet. Until then, use the checkout install below.
+> The project is currently alpha. It is published on PyPI for local stdio use,
+> but it has not been published to the MCP Registry yet. Install with `--pre`
+> while the package uses alpha versions.
 
 ## Why ASIC And EDA Engineers Might Care
 
@@ -48,7 +48,19 @@ Good fits:
 
 ## Quickstart
 
-Clone the repo and install it in editable mode:
+Install the alpha package:
+
+```bash
+pip install --pre pyslang-mcp
+```
+
+Run the local stdio server:
+
+```bash
+pyslang-mcp
+```
+
+For contributor setup, clone the repo and install it in editable mode:
 
 ```bash
 git clone https://github.com/ariklapid/pyslang-mcp.git
@@ -57,7 +69,7 @@ python -m venv .venv
 ./.venv/bin/pip install -e '.[dev]'
 ```
 
-Run the local stdio server:
+Run the checkout stdio server:
 
 ```bash
 ./.venv/bin/python -m pyslang_mcp
@@ -79,6 +91,20 @@ Run tests:
 
 Use local `stdio`. The MCP client should launch the server on the same machine,
 VM, or dev container that can see your RTL checkout.
+
+```json
+{
+  "mcpServers": {
+    "pyslang-mcp": {
+      "command": "pyslang-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+For editable checkout installs, point the command at the checkout virtual
+environment instead:
 
 ```json
 {
@@ -232,10 +258,10 @@ Implemented:
 - fixture-backed tests and Ubuntu CI for Python 3.11 and 3.12
 - package smoke CI from a built wheel
 - PyPI Trusted Publishing release workflow
+- PyPI alpha release
 
 Not done yet:
 
-- PyPI Trusted Publisher configuration and first release
 - MCP Registry publication
 - schema freeze for a non-alpha release
 - broad platform validation beyond the current Linux-focused CI path

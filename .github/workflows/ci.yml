@@ -112,7 +112,7 @@ jobs:
         run: |
           python -m venv /tmp/pyslang-mcp-wheel-smoke
           /tmp/pyslang-mcp-wheel-smoke/bin/pip install --upgrade pip
-          /tmp/pyslang-mcp-wheel-smoke/bin/pip install dist/*.whl
+          /tmp/pyslang-mcp-wheel-smoke/bin/pip install --pre --no-cache-dir dist/*.whl
 
       - name: Check installed console script help
         run: /tmp/pyslang-mcp-wheel-smoke/bin/pyslang-mcp --help
