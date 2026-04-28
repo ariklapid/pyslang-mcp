@@ -39,15 +39,15 @@ What exists:
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml`
 - PyPI package `pyslang-mcp` on the public alpha line
+- MCP Registry entry `io.github.ariklapid/pyslang-mcp`
 - a local `.venv/` used for research and validation on this machine only
 
 What does not exist yet:
 
-- MCP Registry publication
 - copy-paste client configuration examples for multiple MCP clients
 
-Do not describe this repo as broadly client-ready. A PyPI alpha exists, but the
-project is still alpha and not MCP Registry published.
+Do not describe this repo as broadly client-ready. A PyPI alpha and MCP
+Registry entry exist, but the project is still alpha.
 
 ## Product Definition
 
@@ -152,6 +152,7 @@ The repository now contains:
 - package smoke CI from a built wheel
 - manual PyPI Trusted Publishing workflow with release-gate tests
 - PyPI alpha release line
+- MCP Registry entry `io.github.ariklapid/pyslang-mcp`
 
 The implemented V1 tools match the intended tool list, with one important
 honesty constraint:
@@ -208,7 +209,6 @@ Implication:
 
 The major local implementation pieces now exist. The main remaining work is:
 
-- MCP Registry publication
 - real client configuration examples and docs
 - broader real-world fixture coverage
 - schema hardening / freeze decisions

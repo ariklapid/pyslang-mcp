@@ -25,9 +25,8 @@ checkouts.
 
 > [!NOTE]
 > The project is currently alpha and published on
-> [PyPI](https://pypi.org/project/pyslang-mcp/) for local stdio use. Install
-> with `--pre` while the package uses alpha versions. It has not been published
-> to the MCP Registry yet.
+> [PyPI](https://pypi.org/project/pyslang-mcp/) and the MCP Registry for local
+> stdio use. Install with `--pre` while the package uses alpha versions.
 
 ## Why ASIC And EDA Engineers Might Care
 
@@ -262,10 +261,10 @@ Implemented:
 - package smoke CI from a built wheel
 - manual PyPI Trusted Publishing release workflow with release-gate tests
 - PyPI alpha release line: [`pyslang-mcp`](https://pypi.org/project/pyslang-mcp/)
+- MCP Registry entry: `io.github.ariklapid/pyslang-mcp`
 
 Not done yet:
 
-- MCP Registry publication
 - schema freeze for a non-alpha release
 - broad platform validation beyond the current Linux-focused CI path
 

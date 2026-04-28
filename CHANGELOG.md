@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Documented the successful MCP Registry publication.
+
 ## 0.1.0a3 - 2026-04-28
 
 - Added MCP Registry package verification metadata and `server.json`.

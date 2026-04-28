@@ -1,7 +1,7 @@
 # MCP Registry Publication
 
-This repo is prepared for MCP Registry publication, but the registry entry is
-not public until the manual release workflow publishes it.
+This repo is published to the MCP Registry as
+`io.github.ariklapid/pyslang-mcp`.
 
 ## Server Identity
 
@@ -51,7 +51,7 @@ Before running the release workflow:
 - update `CHANGELOG.md`
 - confirm `README.md` still contains the `mcp-name` marker
 - confirm `server.json` describes only the supported local stdio package
-- keep the README honest if the registry publish has not happened yet
+- keep the README and release docs aligned with the true registry status
 
 ## References
 

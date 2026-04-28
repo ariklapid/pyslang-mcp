@@ -33,12 +33,12 @@ Already in place:
 - release workflow gate covering lint, type checks, tests, build checks, and
   installed-wheel MCP stdio smoke
 - MCP Registry metadata and package ownership marker
+- MCP Registry publication for `io.github.ariklapid/pyslang-mcp`
 - PyPI project and active Trusted Publisher
 - public alpha release line on PyPI
 
 Not yet in place:
 
-- completed MCP Registry publication
 - non-alpha schema freeze
 
 ## Current Install
