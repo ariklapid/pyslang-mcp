@@ -1,6 +1,7 @@
 # pyslang-mcp
 
 [![CI](https://github.com/ariklapid/pyslang-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ariklapid/pyslang-mcp/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/pyslang-mcp.svg)](https://pypi.org/project/pyslang-mcp/)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 ![Transport](https://img.shields.io/badge/transport-stdio-informational)
@@ -22,9 +23,10 @@ RTL refactoring tool. It is a small semantic analysis service for local HDL
 checkouts.
 
 > [!NOTE]
-> The project is currently alpha. It is published on PyPI for local stdio use,
-> but it has not been published to the MCP Registry yet. Install with `--pre`
-> while the package uses alpha versions.
+> The project is currently alpha and published on
+> [PyPI](https://pypi.org/project/pyslang-mcp/) for local stdio use. Install
+> with `--pre` while the package uses alpha versions. It has not been published
+> to the MCP Registry yet.
 
 ## Why ASIC And EDA Engineers Might Care
 
@@ -53,6 +55,10 @@ Install the alpha package:
 ```bash
 pip install --pre pyslang-mcp
 ```
+
+Current public alpha: `0.1.0a2`. The initial `0.1.0a1` upload was yanked
+because it could resolve an incompatible `httpx` prerelease when installed with
+`pip --pre`.
 
 Run the local stdio server:
 
@@ -258,7 +264,7 @@ Implemented:
 - fixture-backed tests and Ubuntu CI for Python 3.11 and 3.12
 - package smoke CI from a built wheel
 - PyPI Trusted Publishing release workflow
-- PyPI alpha release
+- PyPI alpha release: [`pyslang-mcp 0.1.0a2`](https://pypi.org/project/pyslang-mcp/0.1.0a2/)
 
 Not done yet:
 

@@ -1,13 +1,15 @@
-# PyPI Launch Plan
+# PyPI Release Runbook
 
-This plan tracks the work needed to make `pyslang-mcp` installable by anyone
-on Linux with:
+This document tracks the current PyPI release status and the repeatable release
+process for `pyslang-mcp`.
+
+The current public alpha installs on Linux with:
 
 ```bash
 pip install --pre pyslang-mcp
 ```
 
-The first public package should stay technically honest: local-first, stdio,
+The public support statement remains intentionally narrow: local-first, stdio,
 read-only, alpha, and Linux-validated.
 
 ## Current State
@@ -25,16 +27,40 @@ Already in place:
 - macOS Python 3.12 CI for basic compatibility
 - stdio MCP protocol smoke in CI
 - HDL smoke validation on Ubuntu
-- package metadata for the first alpha release
+- package metadata for the public alpha line
 - wheel/sdist package smoke in CI
 - release workflow using PyPI Trusted Publishing
 - PyPI project and active Trusted Publisher
-- public alpha release
+- public alpha release `0.1.0a2`
+- yanked `0.1.0a1`, the broken first upload
 
 Not yet in place:
 
 - MCP Registry publication
 - non-alpha schema freeze
+
+## Current Install
+
+```bash
+pip install --pre pyslang-mcp
+pyslang-mcp --help
+```
+
+MCP client config for a PyPI install:
+
+```json
+{
+  "mcpServers": {
+    "pyslang-mcp": {
+      "command": "pyslang-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+`--pre` is required while the latest public release is an alpha. Omit `--pre`
+after publishing a stable `0.1.0` or later.
 
 ## Linux Feasibility
 
@@ -50,7 +76,7 @@ publishes manylinux wheels for CPython 3.11 and 3.12 on:
 That means normal Linux users on those platforms should not need to build
 `slang` locally.
 
-For the first PyPI release, the public Linux support statement should be:
+For the current alpha releases, the public Linux support statement is:
 
 - Linux x86_64 and aarch64
 - Python 3.11 and 3.12
@@ -59,7 +85,7 @@ For the first PyPI release, the public Linux support statement should be:
 Do not claim broad Windows, hosted, or registry-ready support just because the
 package may install elsewhere.
 
-## Required Pre-Release Work
+## Completed Launch Work
 
 ### 1. Polish package metadata
 
@@ -81,7 +107,8 @@ Done in the repo for the first alpha line:
   - `license = "Apache-2.0"`
   - `license-files = ["LICENSE"]`
 
-Keep the development status classifier as alpha for the first release:
+Keep the development status classifier as alpha while publishing alpha
+releases:
 
 ```toml
 "Development Status :: 3 - Alpha"
@@ -120,8 +147,8 @@ Done in `.github/workflows/release.yml`.
 
 Configured triggers:
 
-- `workflow_dispatch` for the first release
-- tags like `v*` after the first release process is proven
+- `workflow_dispatch` for manual release runs
+- tags like `v*` for normal releases
 
 The workflow:
 
@@ -162,7 +189,7 @@ manual approval and can be restricted to trusted branches/tags.
 For future releases, keep the active publisher bound to the same workflow and
 environment.
 
-### 5. Decide first public version
+### 5. Current public version
 
 Current public alpha version:
 
@@ -174,7 +201,10 @@ version = "0.1.0a2"
 `httpx` runtime bound so `pip install --pre pyslang-mcp` does not select
 incompatible `httpx` 1.0 development releases.
 
-### 6. Update docs at release time
+`0.1.0a1` is yanked on PyPI. It remains visible for explicitly pinned installs,
+but normal resolver behavior should prefer `0.1.0a2`.
+
+### 6. Public docs
 
 The package is live. Public install docs now use:
 
@@ -197,7 +227,7 @@ and:
 
 Keep the checkout-based install path for contributors.
 
-## Release Checklist
+## Future Release Checklist
 
 Before tagging:
 
@@ -213,11 +243,11 @@ Before tagging:
 - changelog has release notes
 - version is bumped
 
-Tag:
+Tag using the version in `pyproject.toml`:
 
 ```bash
-git tag v0.1.0a2
-git push origin v0.1.0a2
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 Verify after publish:
@@ -233,7 +263,6 @@ If publishing `0.1.0` instead of an alpha version, omit `--pre`.
 
 ## Risks
 
-- Package name can be claimed before the pending publisher is used.
 - `pyslang` wheel availability defines the practical Linux install matrix.
 - A broken release file cannot be overwritten on PyPI; publish a new version
   instead.

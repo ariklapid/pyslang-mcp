@@ -24,8 +24,8 @@ tight and technically honest.
 
 ## Current Repo Reality
 
-As of 2026-04-28, this repo has moved past the documentation-only stage into an
-alpha local implementation.
+As of 2026-04-28, this repo has moved past the documentation-only stage into a
+PyPI-published alpha implementation.
 
 What exists:
 
@@ -38,6 +38,7 @@ What exists:
 - `tests/` with fixture-backed coverage
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml`
+- PyPI package `pyslang-mcp` at current alpha `0.1.0a2`
 - a local `.venv/` used for research and validation on this machine only
 
 What does not exist yet:
@@ -149,7 +150,8 @@ The repository now contains:
 - fixture-backed unit, integration, and MCP-level tests
 - CI on GitHub Actions for Ubuntu with Python 3.11 and 3.12
 - package smoke CI from a built wheel
-- PyPI Trusted Publishing workflow for the first alpha release
+- PyPI Trusted Publishing workflow
+- PyPI alpha release `0.1.0a2`
 
 The implemented V1 tools match the intended tool list, with one important
 honesty constraint:

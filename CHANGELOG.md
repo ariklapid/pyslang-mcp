@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Updated README and release docs to reflect public PyPI alpha support and the
+  yanked `0.1.0a1` release.
+
 ## 0.1.0a2 - 2026-04-28
 
 - Added an explicit `httpx>=0.27.1,<0.29` runtime bound so
