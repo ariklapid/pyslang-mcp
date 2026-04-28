@@ -38,7 +38,7 @@ What exists:
 - `tests/` with fixture-backed coverage
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml`
-- PyPI package `pyslang-mcp` at current alpha `0.1.0a2`
+- PyPI package `pyslang-mcp` on the public alpha line
 - a local `.venv/` used for research and validation on this machine only
 
 What does not exist yet:
@@ -150,8 +150,8 @@ The repository now contains:
 - fixture-backed unit, integration, and MCP-level tests
 - CI on GitHub Actions for Ubuntu with Python 3.11 and 3.12
 - package smoke CI from a built wheel
-- PyPI Trusted Publishing workflow
-- PyPI alpha release `0.1.0a2`
+- manual PyPI Trusted Publishing workflow with release-gate tests
+- PyPI alpha release line
 
 The implemented V1 tools match the intended tool list, with one important
 honesty constraint:

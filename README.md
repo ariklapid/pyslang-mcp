@@ -1,4 +1,5 @@
 # pyslang-mcp
+<!-- mcp-name: io.github.ariklapid/pyslang-mcp -->
 
 [![CI](https://github.com/ariklapid/pyslang-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ariklapid/pyslang-mcp/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyslang-mcp.svg)](https://pypi.org/project/pyslang-mcp/)
@@ -55,8 +56,6 @@ Install the alpha package:
 ```bash
 pip install --pre pyslang-mcp
 ```
-
-Current public alpha: `0.1.0a2`.
 
 Run the local stdio server:
 
@@ -261,8 +260,8 @@ Implemented:
 - bounded in-memory cache
 - fixture-backed tests and Ubuntu CI for Python 3.11 and 3.12
 - package smoke CI from a built wheel
-- PyPI Trusted Publishing release workflow
-- PyPI alpha release: [`pyslang-mcp 0.1.0a2`](https://pypi.org/project/pyslang-mcp/0.1.0a2/)
+- manual PyPI Trusted Publishing release workflow with release-gate tests
+- PyPI alpha release line: [`pyslang-mcp`](https://pypi.org/project/pyslang-mcp/)
 
 Not done yet:
 
@@ -283,6 +282,7 @@ Useful commands:
 Architecture and contribution docs:
 
 - [docs/architecture.md](./docs/architecture.md)
+- [docs/mcp-registry.md](./docs/mcp-registry.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 - [pyslang-mcp-plan.md](./pyslang-mcp-plan.md)
 

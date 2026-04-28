@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ariklapid/pyslang-mcp",
+  "title": "pyslang-mcp",
+  "description": "Compiler-backed read-only Verilog and SystemVerilog project analysis.",
+  "version": "0.1.0a3",
+  "websiteUrl": "https://github.com/ariklapid/pyslang-mcp",
+  "repository": {
+    "url": "https://github.com/ariklapid/pyslang-mcp",
+    "source": "github",
+    "id": "1214106457"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "pyslang-mcp",
+      "version": "0.1.0a3",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

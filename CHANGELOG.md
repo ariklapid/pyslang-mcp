@@ -2,8 +2,13 @@
 
 ## Unreleased
 
-- Updated README and release docs to reflect public PyPI alpha support and the
-  yanked `0.1.0a1` release.
+## 0.1.0a3 - 2026-04-28
+
+- Added MCP Registry package verification metadata and `server.json`.
+- Hardened the release workflow so PyPI publishing depends on lint, type,
+  tests, build checks, and an installed-wheel MCP stdio smoke.
+- Added MCP Registry publishing after the PyPI release job.
+- Restricted release publishing to a manually triggered GitHub Actions workflow.
 
 ## 0.1.0a2 - 2026-04-28
 

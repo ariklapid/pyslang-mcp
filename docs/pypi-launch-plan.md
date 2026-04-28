@@ -29,14 +29,16 @@ Already in place:
 - HDL smoke validation on Ubuntu
 - package metadata for the public alpha line
 - wheel/sdist package smoke in CI
-- release workflow using PyPI Trusted Publishing
+- manual-only release workflow using PyPI Trusted Publishing
+- release workflow gate covering lint, type checks, tests, build checks, and
+  installed-wheel MCP stdio smoke
+- MCP Registry metadata and package ownership marker
 - PyPI project and active Trusted Publisher
-- public alpha release `0.1.0a2`
-- yanked `0.1.0a1`, the broken first upload
+- public alpha release line on PyPI
 
 Not yet in place:
 
-- MCP Registry publication
+- completed MCP Registry publication
 - non-alpha schema freeze
 
 ## Current Install
@@ -145,19 +147,32 @@ the installed console script.
 
 Done in `.github/workflows/release.yml`.
 
-Configured triggers:
+Configured trigger:
 
-- `workflow_dispatch` for manual release runs
-- tags like `v*` for normal releases
+- `workflow_dispatch` only
+
+Tag pushes do not publish. A release can only start from a manual GitHub
+Actions run. The workflow also checks the triggering actor before doing any
+build or publish work. By default, the authorized actor is the repository
+owner. If the release account ever differs from the repo owner, set the
+repository variable `RELEASE_ACTOR` to that GitHub username.
 
 The workflow:
 
-1. Check out the repository.
-2. Set up Python 3.12.
-3. Install build tooling.
-4. Build wheel and sdist.
-5. Upload the built distributions as an artifact.
-6. Publish with PyPI Trusted Publishing.
+1. Verifies the manual release actor.
+2. Checks that the requested version matches `pyproject.toml`,
+   `src/pyslang_mcp/__init__.py`, and `server.json`.
+3. Checks the MCP Registry README ownership marker.
+4. Validates `server.json` against the MCP Registry schema.
+5. Runs formatting, lint, type checks, full tests, MCP stdio protocol smoke,
+   and HDL smoke.
+6. Builds wheel and sdist.
+7. Runs `twine check`.
+8. Installs the wheel in a fresh virtual environment.
+9. Runs the installed console script and installed MCP stdio smoke.
+10. Publishes with PyPI Trusted Publishing.
+11. Optionally publishes `server.json` to the MCP Registry after the new PyPI
+    release is visible with the ownership marker.
 
 Use PyPI Trusted Publishing instead of a long-lived API token.
 
@@ -184,25 +199,22 @@ PyPI configuration:
 - environment: `pypi`
 
 Using a GitHub environment is strongly recommended so publishing can require
-manual approval and can be restricted to trusted branches/tags.
+manual approval and can be restricted to trusted branches.
 
 For future releases, keep the active publisher bound to the same workflow and
 environment.
 
-### 5. Current public version
+### 5. Versioning
 
-Current public alpha version:
+Before running the release workflow, bump the package version in:
 
-```toml
-version = "0.1.0a2"
-```
+- `pyproject.toml`
+- `src/pyslang_mcp/__init__.py`
+- `server.json`
+- `CHANGELOG.md`
 
-`0.1.0a1` was the first upload. `0.1.0a2` supersedes it with an explicit
-`httpx` runtime bound so `pip install --pre pyslang-mcp` does not select
-incompatible `httpx` 1.0 development releases.
-
-`0.1.0a1` is yanked on PyPI. It remains visible for explicitly pinned installs,
-but normal resolver behavior should prefer `0.1.0a2`.
+The release workflow refuses to publish if the manually entered version does
+not match the committed metadata.
 
 ### 6. Public docs
 
@@ -229,26 +241,30 @@ Keep the checkout-based install path for contributors.
 
 ## Future Release Checklist
 
-Before tagging:
+Before running the release workflow:
 
-- `ruff format --check src tests`
-- `ruff check src tests`
+- `ruff format --check src tests scripts`
+- `ruff check src tests scripts`
 - `pyright`
 - `pytest`
 - `pytest -q tests/test_mcp_stdio.py`
 - `pytest -q tests/test_hdl_smoke.py`
 - `python -m build --wheel --sdist`
+- `python -m twine check dist/*`
 - package smoke passes from a wheel install
 - README does not claim registry or hosted availability
 - changelog has release notes
 - version is bumped
 
-Tag using the version in `pyproject.toml`:
+Publish from GitHub Actions only:
 
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
+1. Push the release commit to `main`.
+2. Open Actions -> Release -> Run workflow.
+3. Enter the exact version from `pyproject.toml`.
+4. Leave `publish_registry` enabled when `server.json` should be published to
+   the MCP Registry after PyPI succeeds.
+
+Do not use a tag push as a publish mechanism.
 
 Verify after publish:
 
