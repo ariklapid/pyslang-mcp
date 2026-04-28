@@ -56,9 +56,7 @@ Install the alpha package:
 pip install --pre pyslang-mcp
 ```
 
-Current public alpha: `0.1.0a2`. The initial `0.1.0a1` upload was yanked
-because it could resolve an incompatible `httpx` prerelease when installed with
-`pip --pre`.
+Current public alpha: `0.1.0a2`.
 
 Run the local stdio server:
 
