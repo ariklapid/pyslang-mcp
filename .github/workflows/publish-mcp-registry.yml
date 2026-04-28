@@ -1,0 +1,126 @@
+name: Publish MCP Registry
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version already published on PyPI. Must match server.json package metadata."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-mcp-registry-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MCP_SERVER_NAME: io.github.ariklapid/pyslang-mcp
+      RELEASE_VERSION: ${{ inputs.version }}
+
+    steps:
+      - name: Confirm authorized release actor
+        env:
+          AUTHORIZED_RELEASE_ACTOR: ${{ vars.RELEASE_ACTOR || github.repository_owner }}
+        run: |
+          if [ "$GITHUB_ACTOR" != "$AUTHORIZED_RELEASE_ACTOR" ]; then
+            echo "::error::Registry publishing may only be run by $AUTHORIZED_RELEASE_ACTOR; got $GITHUB_ACTOR."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate metadata and PyPI ownership marker
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          version = os.environ["RELEASE_VERSION"]
+          server_name = os.environ["MCP_SERVER_NAME"]
+          marker = f"mcp-name: {server_name}"
+
+          server_json = json.loads(Path("server.json").read_text())
+          if server_json["name"] != server_name:
+              raise SystemExit(f"server.json name {server_json['name']!r} != {server_name!r}")
+          if server_json["version"] != version:
+              raise SystemExit(f"server.json version {server_json['version']!r} != {version!r}")
+
+          pypi_packages = [
+              package
+              for package in server_json["packages"]
+              if package["registryType"] == "pypi" and package["identifier"] == "pyslang-mcp"
+          ]
+          if len(pypi_packages) != 1:
+              raise SystemExit("server.json must contain exactly one pyslang-mcp PyPI package")
+          if pypi_packages[0]["version"] != version:
+              raise SystemExit(
+                  f"server.json PyPI package version {pypi_packages[0]['version']!r} != {version!r}"
+              )
+
+          url = "https://pypi.org/pypi/pyslang-mcp/json"
+          for attempt in range(1, 31):
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  data = json.load(response)
+              description = data.get("info", {}).get("description") or ""
+              files = data.get("releases", {}).get(version) or []
+              if files and marker in description:
+                  print(f"PyPI release {version} is visible with MCP marker")
+                  break
+              print(f"Waiting for PyPI release {version} and MCP marker; attempt {attempt}/30")
+              time.sleep(10)
+          else:
+              raise SystemExit(f"PyPI release {version} or MCP marker was not visible in time")
+          PY
+
+      - name: Validate server.json schema
+        run: |
+          python -m pip install --upgrade pip jsonschema
+          python - <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          from jsonschema import Draft202012Validator
+
+          server_json = json.loads(Path("server.json").read_text())
+          with urllib.request.urlopen(server_json["$schema"], timeout=30) as response:
+              schema = json.load(response)
+          validator = Draft202012Validator(schema)
+          errors = sorted(validator.iter_errors(server_json), key=lambda error: error.path)
+          if errors:
+              for error in errors:
+                  location = ".".join(str(part) for part in error.path) or "<root>"
+                  print(f"{location}: {error.message}")
+              raise SystemExit(1)
+          PY
+
+      - name: Install mcp-publisher
+        run: |
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          curl -L \
+            "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_${os}_${arch}.tar.gz" \
+            | tar xz mcp-publisher
+          ./mcp-publisher --version
+
+      - name: Publish to MCP Registry
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

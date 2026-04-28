@@ -38,6 +38,10 @@ workflow:
 
 Tag pushes do not publish to PyPI or the MCP Registry.
 
+If PyPI publication succeeds but registry publication needs to be retried, use
+the separate manual `Publish MCP Registry` workflow with the already published
+version. That workflow does not upload anything to PyPI.
+
 ## Release Checklist
 
 Before running the release workflow:

@@ -302,7 +302,7 @@ jobs:
             *) echo "::error::Unsupported architecture: $arch"; exit 1 ;;
           esac
           curl -L \
-            "https://github.com/modelcontextprotocol/registry/releases/download/latest/mcp-publisher_${os}_${arch}.tar.gz" \
+            "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_${os}_${arch}.tar.gz" \
             | tar xz mcp-publisher
           ./mcp-publisher --version
 

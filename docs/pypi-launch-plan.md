@@ -266,6 +266,11 @@ Publish from GitHub Actions only:
 
 Do not use a tag push as a publish mechanism.
 
+If the PyPI publish job succeeds but the MCP Registry job needs a retry, run
+the manual `Publish MCP Registry` workflow with the already published version.
+That workflow validates the PyPI marker and `server.json` before calling
+`mcp-publisher`, and it does not attempt another PyPI upload.
+
 Verify after publish:
 
 ```bash
