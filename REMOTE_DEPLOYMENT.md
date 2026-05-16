@@ -1,482 +1,312 @@
-# 🌐 Remote Secure Deployment Plan
+# Remote MaaS Deployment Plan
 
 > [!CAUTION]
-> DESIGN ONLY. This document describes a possible hosted direction; it does not
-> mean remote deployment exists in the current alpha implementation.
+> DESIGN ONLY. The current alpha implementation is a local `stdio` MCP server.
+> The experimental `streamable-http` transport can be used for the single-server
+> internal alpha path with a bearer token, but it is not a complete production
+> hosted security boundary by itself.
 
-This document describes how to evolve `pyslang-mcp` from a local `stdio`
-analysis server into a remotely connectable MCP service that feels similar to
-well-known hosted MCP integrations such as GitHub or Google Sheets, while still
-preserving the repo's real product definition: compiler-backed, read-only HDL
-project analysis.
+This document describes the planned MaaS direction for `pyslang-mcp`.
+Here, MaaS means a remotely reachable MCP service that exposes the same
+compiler-backed, read-only HDL analysis tools through a managed or
+self-hosted service boundary.
 
-> [!IMPORTANT]
-> Hosted access should be treated as a separate deployment product surface, not
-> as “just expose the current local process over the network.”
+Hosted access is a separate product surface. Do not describe it as "just run
+the current local server over HTTP."
 
-## 🧱 Product Boundary
+## Product Boundary
 
-`pyslang-mcp` is not a SaaS data connector in the same sense as GitHub or
-Google Sheets. Those systems already host the source of truth. This server is
-different:
+`pyslang-mcp` analyzes HDL files on disk under an explicit project root. That
+is different from SaaS connectors such as GitHub or Google Sheets, where the
+service already hosts the source of truth.
 
-- it analyzes files on disk
-- it needs an explicit project root
-- it must not silently read arbitrary host paths
+For RTL, the source itself is usually the most sensitive asset. The MaaS plan
+therefore has two separate tracks:
 
-Implication:
+| Track | Intended users | Source data | Security stance |
+|---|---|---|---|
+| Plan A. Public OSS MaaS | open-source hardware users, demos, education, public CI experiments | public repositories only | convenience service, not suitable for confidential RTL |
+| Plan B. Internal MaaS | companies doing real RTL design | proprietary repositories and internal workspaces | self-hosted inside the company's own network and controls |
 
-- a hosted version must provide controlled workspace access, not just expose the
-  existing local process over the network
+The public service must not be marketed as appropriate for proprietary RTL.
+The enterprise answer is an internal deployment pattern, not a shared public
+hosted endpoint.
 
-## 🎯 Goal
+## Plan A. Public OSS MaaS
 
-Provide a remotely connectable MCP endpoint that:
+### Goal
 
-- supports authenticated users and agents
-- can analyze private HDL repositories safely
-- preserves strict read-only semantics
-- isolates users, repositories, and workspaces
-- returns the same compact JSON tool outputs as the local server
+Provide a low-friction hosted service for public Verilog/SystemVerilog
+projects so users can try `pyslang-mcp` without installing Python, `pyslang`,
+or an MCP server locally.
 
-## 🚫 Non-Goals
+Positioning:
 
-- shared host-path access across tenants
-- arbitrary filesystem browsing
-- remote code execution
-- simulation, synthesis, or waveform support
-- mutable repository actions
+- hosted semantic analysis for public HDL repositories
+- useful for OSS hardware projects, examples, education, and demos
+- acceptable for code already intended to be public
+- explicitly not for confidential or corporate RTL
 
-## 🧭 Deployment Model
+### MVP Scope
 
-The recommended model is workspace-scoped remote MCP.
+The first public service should accept:
 
-High-level flow:
+- a public Git URL
+- a branch, tag, or commit SHA
+- either a filelist or explicit source files
+- optional include directories, defines, and top modules
 
-1. User authenticates to the hosted service.
-2. User selects or provisions a workspace.
-3. The workspace is populated from a repo clone, uploaded archive, mounted
-   volume, or pre-synced project source.
-4. The MCP server only analyzes files inside that workspace root.
-5. Tool calls include a logical workspace identifier plus project-relative
-   inputs.
+It should expose the existing V1 tools:
 
-### Hosted Interaction Model
+- `pyslang_parse_files`
+- `pyslang_parse_filelist`
+- `pyslang_get_diagnostics`
+- `pyslang_list_design_units`
+- `pyslang_describe_design_unit`
+- `pyslang_get_hierarchy`
+- `pyslang_find_symbol`
+- `pyslang_dump_syntax_tree_summary`
+- `pyslang_preprocess_files`
+- `pyslang_get_project_summary`
 
-```mermaid
-flowchart LR
-    User["🧑 User / Agent"]
-    Client["🌍 Remote MCP Client"]
-    Edge["🛡️ HTTPS + Auth"]
-    Control["🧭 Control Plane"]
-    Workspace["📦 Isolated Workspace"]
-    Exec["⚙️ MCP Execution Plane"]
-    Repo["🔐 Repo Snapshot / Upload"]
-    JSON["📦 Stable JSON"]
+Do not add simulation, synthesis, waveform access, RTL edits, or arbitrary
+command execution.
 
-    User --> Client
-    Client --> Edge
-    Edge --> Control
-    Edge --> Exec
-    Control --> Workspace
-    Repo --> Workspace
-    Workspace --> Exec
-    Exec --> JSON
-    JSON --> Client
-```
-
-## 🏗️ Recommended Architecture
-
-### System View
-
-```mermaid
-flowchart TD
-    subgraph CP["🧭 Control Plane"]
-        Gateway["API Gateway"]
-        Auth["Auth Service"]
-        Meta["Workspace Metadata Store"]
-        Queue["Sync / Prewarm Queue"]
-    end
-
-    subgraph DP["📦 Data / Workspace Plane"]
-        Workspace["Per-workspace Storage"]
-        Object["Object Storage / Uploads"]
-        Repo["Repo Mirrors / Clones"]
-    end
-
-    subgraph EP["⚙️ MCP Execution Plane"]
-        Frontend["HTTP MCP Frontend"]
-        Workers["Analysis Workers"]
-        Core["Shared pyslang-mcp core"]
-    end
-
-    Gateway --> Auth
-    Gateway --> Frontend
-    Auth --> Meta
-    Meta --> Queue
-    Queue --> Repo
-    Object --> Workspace
-    Repo --> Workspace
-    Frontend --> Workers
-    Workers --> Core
-    Workers --> Workspace
-```
-
-### 1. Control Plane
-
-Responsibilities:
-
-- authentication
-- user and organization management
-- workspace lifecycle
-- repo connection management
-- audit logging
-- rate limiting and quotas
-
-Suggested components:
-
-- API gateway
-- auth service
-- workspace metadata store
-- job queue for workspace sync and prewarming
-
-### 2. Data / Workspace Plane
-
-Responsibilities:
-
-- repository checkout or upload storage
-- per-workspace file access
-- cached analysis state
-- file mtime tracking
-
-Suggested units:
-
-- one isolated workspace per user/repo/revision combination
-- ephemeral or semi-persistent storage
-- object storage for uploaded bundles
-- workspace metadata pointing to exact commit or snapshot
-
-### 3. MCP Execution Plane
-
-Responsibilities:
-
-- serve MCP over HTTP transport
-- authorize every request against a workspace
-- instantiate analysis only inside the workspace root
-- enforce output limits and timeouts
-
-Suggested units:
-
-- stateless HTTP frontend
-- worker pool or per-workspace execution service
-- shared read-only analysis library reused from the current repo
-
-## 🔐 Security Model
-
-### Security Layers
+### Reference Architecture
 
 ```mermaid
 flowchart LR
-    A["🔑 Authentication"] --> B["🪪 Authorization"]
-    B --> C["📦 Workspace Isolation"]
-    C --> D["🛡️ Transport Security"]
-    D --> E["🧾 Audit Logging"]
+    Client["MCP client"] --> Gateway["Public HTTPS gateway"]
+    Gateway --> Control["Request / workspace controller"]
+    Control --> Clone["Ephemeral public repo clone"]
+    Clone --> Worker["Isolated analysis worker"]
+    Worker --> Server["pyslang-mcp stdio process"]
+    Server --> Result["Bounded JSON result"]
+    Result --> Client
 ```
 
-### Authentication
-
-Use authenticated HTTP access from day one.
-
-Recommended options:
-
-- OAuth/OIDC for human users
-- bearer tokens or service tokens for automation
-- short-lived access tokens for MCP clients
-
-Avoid:
-
-- anonymous hosted access
-- long-lived broad-scope static tokens as the only auth model
-
-### Authorization
-
-Authorization must be workspace-scoped.
-
-Every MCP request should resolve:
-
-- who is calling
-- which workspace they can access
-- which repo snapshot that workspace maps to
-
-Required checks:
-
-- user can access the workspace
-- requested project root is inside the provisioned workspace root
-- requested files and filelists remain inside the workspace boundary
-
-### Isolation
-
-This is the critical difference between a safe hosted service and a dangerous
-"remote shell with parsing."
-
-Minimum acceptable isolation:
-
-- one workspace root per tenant context
-- no access outside that root
-- no shared mutable checkout directory across users
-
-Preferred isolation:
-
-- one container or sandbox per workspace
-- read-only mounted project files for MCP workers
-- scratch directories separated from source directories
-
-### Transport Security
-
-- HTTPS only
-- TLS termination at the edge
-- secure cookies only if browser-based auth is used
-- token redaction in logs
-
-### Auditability
-
-Log:
-
-- authenticated principal
-- workspace ID
-- tool name
-- request timestamps
-- response size and truncation
-- high-level error categories
-
-Do not log:
-
-- full source contents by default
-- raw credentials
-- secrets found in user repos
-
-## 📁 Workspace Provisioning Modes
-
-Support these in order:
-
-### Mode 1. Single-Tenant Self-Hosted
-
-Best first remote target.
-
-Pattern:
-
-- one company or team deploys the service in its own environment
-- the service analyzes repos already available in that network
-
-Why first:
-
-- simpler auth
-- fewer multi-tenant risks
-- easier enterprise adoption
-
-### Mode 2. Managed Repo Sync
-
-Pattern:
-
-- hosted control plane connects to GitHub/GitLab/Bitbucket
-- user authorizes repo access
-- service clones selected repos into isolated workspaces
-
-Requirements:
-
-- app installation or OAuth integration
-- commit pinning
-- branch / revision selection
-- background sync jobs
-
-### Mode 3. Upload-Based Workspace
-
-Pattern:
-
-- user uploads a zip or tarball snapshot
-- service expands it into an isolated workspace
-
-Use case:
-
-- private code without direct VCS integration
-
-## 🔌 MCP API Shape For Hosted Use
-
-Keep the semantic tool names the same when possible.
-
-But the transport-facing inputs will likely need one of these patterns:
-
-### Option A. Keep `project_root`
-
-Requests still pass:
-
-- `project_root`
-- `files` or `filelist`
-
-The server maps `project_root` inside a workspace root.
-
-Good:
-
-- local and remote parity
-
-Risk:
-
-- more path-handling complexity for clients
-
-### Option B. Introduce `workspace_id`
-
-Requests pass:
-
-- `workspace_id`
-- optional relative `project_root`
-- `files` or `filelist`
-
-Good:
-
-- cleaner hosted identity boundary
-- easier auth and audit
-
-Recommended:
-
-- use `workspace_id` for hosted mode
-- preserve current `project_root` shape for local mode
-
-### API Decision Diagram
-
-```mermaid
-flowchart TD
-    Start["Need hosted MCP input shape"] --> A{"Optimize for"}
-    A -->|local parity| B["Keep project_root"]
-    A -->|hosted isolation| C["Add workspace_id"]
-    B --> D["Higher path-handling complexity"]
-    C --> E["Cleaner auth + audit boundary"]
-    E --> F["Recommended hosted design"]
-```
-
-## 🧩 Codebase Changes Needed
-
-The current repo already has the right core split:
-
-- `project_loader.py`
-- `analysis.py`
-- `serializers.py`
-- `cache.py`
-- `server.py`
-
-To support secure remote deployment, add:
-
-- `auth.py`
-  - token validation
-  - principal extraction
-- `workspace_manager.py`
-  - workspace resolution
-  - repo snapshot selection
-  - local path mapping
-- `policy.py`
-  - authorization checks
-  - per-tool limits
-- `audit.py`
-  - structured logs
-  - security events
-- `transport_http.py`
-  - production HTTP MCP startup path
-
-## 🧠 Caching Strategy
-
-Local cache logic should be reused, but hosted deployment needs stronger cache
-keys:
-
-- workspace ID
-- repo snapshot / commit SHA
-- project config hash
-- tracked file mtimes or immutable snapshot metadata
-
-For remote service operation:
-
-- prefer immutable workspace snapshots keyed by commit
-- avoid cross-tenant cache reuse without explicit hard partitioning
-
-## ⚙️ Operational Controls
+Implementation notes:
+
+- Keep the analysis server on `stdio` inside the worker.
+- Put the network boundary in a thin service wrapper.
+- Clone public repos into ephemeral workspaces.
+- Run each analysis in a container or equivalent sandbox.
+- Enforce CPU, memory, wall-clock, file-count, and output-size limits.
+- Cache public repo analysis only when keyed by repo, commit, and project
+  configuration.
+
+### Security And Data Policy
 
 Required controls:
 
-- per-request timeout
-- per-tool response-size limit
-- concurrency limit per workspace
-- rate limiting per user / org / token
-- storage quota per workspace
-- background cleanup of old workspaces
+- public repositories only in the first version
+- no private repository tokens
+- no confidential uploads
+- no persistent source storage by default
+- short-lived workspaces
+- project-root path enforcement inside each workspace
+- no network egress from analysis workers unless explicitly required for repo
+  clone setup
+- source excerpts excluded from operational logs by default
+- rate limits by IP, user, token, or GitHub identity
 
-Nice to have:
+User-facing policy:
 
-- prewarmed analysis caches for active repos
-- tracing around analysis latency
-- metrics for tool popularity and truncation frequency
+- "Use only with code you are authorized to send to a third-party hosted
+  service."
+- "Do not submit proprietary, export-controlled, or confidential RTL."
 
-## 🗺️ Rollout Plan
+### Rollout
 
-### Rollout Overview
+1. Write the public hosted threat model and acceptable-use text.
+2. Build a service wrapper that starts isolated `pyslang-mcp` workers.
+3. Publish a container image for the worker.
+4. Deploy a small alpha on AWS ECS/Fargate, Cloud Run, Fly.io, or an equivalent
+   service.
+5. Add observability for request counts, latency, tool errors, worker exits,
+   truncation rates, and cost per analysis.
+6. Publish as an OSS demo MaaS, not as enterprise-secure hosted EDA.
+
+### Non-Goals
+
+- accepting private repo credentials
+- promising corporate confidentiality
+- supporting multi-tenant proprietary RTL
+- keeping long-lived user workspaces
+- replacing local or self-hosted use for serious design work
+
+## Plan B. Internal MaaS
+
+### Goal
+
+Give real RTL teams a quick bring-up path for running `pyslang-mcp` inside
+their own infrastructure, close to their repositories, AI tools, and security
+controls.
+
+Positioning:
+
+- self-hosted MCP semantic analysis for internal RTL repositories
+- company-owned auth, network, storage, logging, and compliance posture
+- no source code needs to leave the corporate environment
+
+This is the right answer for proprietary RTL.
+
+### Deployment Patterns
+
+Support these patterns in order:
+
+1. Single-user or small-team internal server.
+2. Shared team service with internal auth and repo access.
+3. Kubernetes worker pool for multiple projects and teams.
+4. Air-gapped or tightly firewalled installation.
+
+### Reference Architecture
 
 ```mermaid
-flowchart LR
-    P0["Phase 0<br/>Local stdio"] --> P1["Phase 1<br/>Single-tenant HTTP"]
-    P1 --> P2["Phase 2<br/>Repo-connected hosted workspaces"]
-    P2 --> P3["Phase 3<br/>Multi-tenant managed service"]
+flowchart TD
+    Client["Internal MCP clients"] --> Edge["Internal gateway / reverse proxy"]
+    Edge --> Auth["Company SSO / OIDC / service tokens"]
+    Edge --> Frontend["Internal MCP frontend"]
+    Frontend --> Scheduler["Workspace / worker scheduler"]
+    Scheduler --> Worker["Isolated analysis worker"]
+    Worker --> Server["pyslang-mcp stdio process"]
+    Worker --> Source["Read-only repo checkout or mounted workspace"]
+    Frontend --> Audit["Internal audit logs / metrics"]
 ```
 
-### Phase 0. Keep Local `stdio` First
+The current `pyslang-mcp` analysis core should remain mostly unchanged.
+The internal MaaS layer should provide workspace identity, authorization,
+process isolation, and operational controls around it.
 
-Done in the current repo.
+### Bring-Up Deliverables
 
-### Phase 1. Production-Grade Self-Hosted HTTP Mode
+Minimum useful package:
 
-Deliverables:
+- Dockerfile or published container image
+- Docker Compose example for a single internal server
+- native Python fallback for corporate servers where Docker is not available
+- copy-paste MCP client examples for local, dev-server, and internal gateway
+  modes
+- admin configuration reference
+- security guide
 
-- authenticated HTTP transport
-- single-tenant deployment guide
-- workspace-scoped path enforcement
-- audit logs
+Implemented in the repo now:
 
-Goal:
+- `Dockerfile`
+- `deploy/internal/docker-compose.yml`
+- `deploy/internal/pyslang-mcp.env.example`
+- `deploy/internal/systemd/pyslang-mcp.service.example`
+- `scripts/setup_internal_maas.py`
+- `docs/internal-maas-quickstart.md`
+- bearer-token auth for the experimental HTTP transport via
+  `PYSLANG_MCP_HTTP_BEARER_TOKEN`
+- native Python bring-up steps in `docs/internal-maas-quickstart.md`
 
-- make remote use viable inside one company's own infrastructure
+Still needed for larger team deployments:
 
-### Phase 2. Repo-Connected Hosted Workspaces
+- Helm chart or Kubernetes manifests for a worker pool
+- example reverse-proxy configuration
+- company SSO/OIDC integration
+- multi-workspace routing
+- source-safe metrics and audit export
 
-Deliverables:
+Admin configuration should cover:
 
-- GitHub/GitLab repo connectors
-- workspace provisioning and sync
-- commit-pinned analysis
-- background indexing / prewarming
+- allowed workspace roots or repo sources
+- max repository size
+- max source file count
+- max include/filelist expansion depth
+- max diagnostics, symbols, hierarchy depth, and syntax-summary results
+- worker CPU and memory limits
+- worker timeout
+- cache size and retention
+- logging policy for source excerpts
+- network egress policy
 
-Goal:
+### Security Model
 
-- comparable usability to well-known hosted MCPs, but for HDL repos
+Required controls:
 
-### Phase 3. Multi-Tenant Managed Service
+- company-managed authentication
+- workspace-scoped authorization
+- read-only source mounts or immutable repo snapshots
+- project-root enforcement inside the authorized workspace
+- per-request timeouts and response limits
+- per-user and per-org rate limits
+- audit logs for principal, workspace, tool name, timing, response size,
+  truncation, and error category
+- operational logs that avoid full source contents by default
 
-Deliverables:
+Preferred controls:
 
-- tenant isolation hardening
-- quotas and billing hooks
-- SSO
-- org-level admin controls
-- security review and penetration testing
+- one isolated worker per session, project, or request
+- no shared mutable checkout across unrelated users
+- restricted network egress from workers
+- image pinning and SBOM publication
+- air-gapped install instructions
+- dependency pinning for reproducible deployments
 
-Goal:
+### Internal API Shape
 
-- public hosted product surface
+Hosted/internal mode should introduce explicit workspace identity instead of
+asking clients to name arbitrary host paths.
 
-## ✅ Recommendation
+Recommended request shape:
 
-If the objective is "make this connectable like famous MCPs," the clean path is:
+- `workspace_id`
+- optional project-relative root inside the workspace
+- `files` or `filelist`
+- include directories, defines, and top modules as today
 
-1. keep the current repo's semantic analysis core unchanged
-2. add a secure hosted HTTP transport as a new deployment mode
-3. introduce explicit workspace identity for hosted use
-4. ship single-tenant self-hosted first
-5. only then consider public multi-tenant hosting
+Local mode should preserve the existing `project_root` shape.
 
-That preserves the technical honesty of the current project while still moving
-toward a connectable hosted MCP product.
+### Enterprise Hardening Backlog
+
+- freeze stable JSON schemas for a non-alpha release
+- broaden real-world fixture coverage
+- document filelist compatibility boundaries
+- add configurable path allow/deny policy
+- add worker container image and deployment examples
+- add health and readiness endpoints for service wrappers
+- add source-safe metrics
+- add package and container smoke tests from clean environments
+- validate Linux distributions used by common corporate compute platforms
+
+### Rollout
+
+1. Keep local `stdio` as the supported base.
+2. Publish the self-hosted deployment guide before any hosted claims. Done for
+   the single-server alpha path.
+3. Build and test the worker container. Initial Dockerfile and Compose path are
+   present.
+4. Add Docker Compose for a single internal server. Done.
+5. Add Kubernetes manifests or Helm chart for shared internal use.
+6. Validate on larger internal-style fixture projects.
+7. Add production gateway mode with SSO, multi-workspace routing, and audit
+   export.
+
+## Shared Design Principles
+
+- Preserve read-only behavior.
+- Keep `analysis.py`, `project_loader.py`, `serializers.py`, and `cache.py`
+  transport-independent.
+- Put auth, workspace identity, and network serving in a separate wrapper or
+  module.
+- Require explicit workspace/project roots.
+- Return compact JSON with truncation metadata.
+- Never expose raw host filesystem paths across tenants.
+- Do not claim preprocessor fidelity beyond what `pyslang_preprocess_files`
+  actually validates.
+
+## Recommendation
+
+The practical answer to "Will `pyslang-mcp` be released on MaaS?" is:
+
+1. Yes, a public hosted service can make sense for open-source HDL projects and
+   demos, with clear warnings that it is not for confidential RTL.
+2. For real corporate RTL, the right product is a self-hosted internal MaaS
+   deployment that companies run inside their own network.
+
+Ship Plan B documentation and deployment artifacts before treating hosted MaaS
+as enterprise-ready. Ship Plan A as a convenience/demo surface with strict
+public-code boundaries.

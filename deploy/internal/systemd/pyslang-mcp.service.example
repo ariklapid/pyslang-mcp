@@ -1,0 +1,20 @@
+[Unit]
+Description=pyslang-mcp internal MCP server
+After=network.target
+
+[Service]
+Type=simple
+User=pyslang-mcp
+Group=pyslang-mcp
+Environment=PYSLANG_MCP_HTTP_BEARER_TOKEN=replace-with-long-random-token
+ExecStart=/opt/pyslang-mcp-venv/bin/pyslang-mcp --transport streamable-http --experimental-enable-http --http-host 127.0.0.1 --http-port 8000 --http-require-bearer-token
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Adjust this to the RTL checkout this service is allowed to inspect.
+ReadOnlyPaths=/proj/chip/team/block_a
+
+[Install]
+WantedBy=multi-user.target

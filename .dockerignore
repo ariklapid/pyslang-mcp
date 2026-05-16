@@ -1,10 +1,14 @@
+.git/
 .venv/
 __pycache__/
 .pytest_cache/
-.coverage
 .ruff_cache/
 .pyright/
-dist/
+.coverage
 build/
+dist/
 *.egg-info/
+reports/
+docs/mcp_comparison/
+evaluation.xml
 deploy/internal/.env

@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-- Documented the successful MCP Registry publication.
+- No unreleased changes.
+
+## 0.1.0a4 - 2026-05-16
+
+- Added internal MaaS alpha bring-up artifacts: Dockerfile, Docker Compose
+  config, setup script, native Python fallback docs, and a starter systemd unit.
+- Added bearer-token protection and host/port options for the experimental
+  Streamable HTTP path used by the single-server internal MaaS alpha.
+- Added `/healthz` for container and service health checks.
+- Documented the public OSS MaaS versus self-hosted internal MaaS split.
 
 ## 0.1.0a3 - 2026-04-28
 

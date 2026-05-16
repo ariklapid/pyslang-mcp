@@ -2,8 +2,9 @@
 
 This document describes the internal module layout of `pyslang-mcp` and how
 the pieces cooperate on a single tool call. It is intentionally scoped to
-the current alpha implementation — the hosted-deployment direction is
-sketched separately in [`../REMOTE_DEPLOYMENT.md`](../REMOTE_DEPLOYMENT.md).
+the current alpha implementation — the public OSS MaaS and internal MaaS
+directions are sketched separately in
+[`../REMOTE_DEPLOYMENT.md`](../REMOTE_DEPLOYMENT.md).
 
 ## Module Map
 
@@ -26,7 +27,8 @@ flowchart TD
     end
 
     subgraph Transport["Transport / MCP wrapper"]
-        Server["server.py<br/>FastMCP instance<br/>10 @mcp.tool defs<br/>Annotated params + descriptions<br/>success_result / error_result / run_tool<br/>ToolInputError"]
+        Server["server.py<br/>FastMCP instance<br/>10 @mcp.tool defs<br/>/healthz custom route<br/>Annotated params + descriptions<br/>success_result / error_result / run_tool<br/>ToolInputError"]
+        Auth["auth.py<br/>StaticBearerTokenVerifier<br/>simple internal HTTP bearer-token verifier"]
         Schemas["schemas.py<br/>Pydantic output models<br/>ToolErrorResult + ToolErrorDetail<br/>StrictModel (extra='forbid')<br/>HierarchyNode recursive rebuild"]
     end
 
@@ -53,6 +55,7 @@ flowchart TD
     end
 
     Main --> Server
+    Server --> Auth
     Server --> Schemas
     Server --> Analysis
     Server --> Loader
@@ -77,7 +80,7 @@ flowchart TD
     Scripts --> HdlEx
 
     class Main entry
-    class Server,Schemas transport
+    class Server,Auth,Schemas transport
     class Analysis,Loader core
     class Cache,Serializers infra
     class Types types
@@ -135,7 +138,8 @@ sequenceDiagram
 | Module | Role | Depends on |
 |---|---|---|
 | `__main__.py` | CLI. Parses `--transport`, invokes `create_server().run(transport)`. | `server` |
-| `server.py` | MCP surface. Registers ten read-only `@mcp.tool`s with `Annotated` input schemas, typed return schemas, and a central `run_tool` wrapper that converts load / input errors into structured tool errors. | `analysis`, `project_loader`, `cache`, `schemas`, `types`, `mcp.server.fastmcp` |
+| `server.py` | MCP surface. Registers ten read-only `@mcp.tool`s with `Annotated` input schemas, typed return schemas, a `/healthz` HTTP route, and a central `run_tool` wrapper that converts load / input errors into structured tool errors. | `analysis`, `project_loader`, `cache`, `schemas`, `types`, `auth`, `mcp.server.fastmcp` |
+| `auth.py` | Simple static bearer-token verifier used by the internal MaaS alpha HTTP path. This is not a replacement for company SSO in a broader team deployment. | `mcp.server.auth.provider` |
 | `schemas.py` | Pydantic output models (one per tool) plus `ToolErrorResult`. `StrictModel` forbids extra keys; `HierarchyNode.model_rebuild()` enables recursive `children`. FastMCP reads these via `Annotated[CallToolResult, Result \| Error]`. | `pydantic` |
 | `analysis.py` | pyslang-backed analysis functions. Builds `Compilation`, elaborates, extracts diagnostics, design units, hierarchy, symbols, syntax-tree summaries, and preprocessing metadata. Everything flows through `stabilize_json` + `limit_list`. | `pyslang`, `serializers`, `types` |
 | `project_loader.py` | Normalizes and safety-checks project inputs. Resolves project roots, expands nested `.f` filelists (`-f`, `-F`, `+incdir+`, `-I`, `+define+`), records unsupported tokens, and enforces `relative_to(root)` on every path. | `types` |
@@ -171,8 +175,8 @@ sequenceDiagram
   safest first step.
 - **Hosted transport.** Add an authenticated HTTP entry path alongside
   `__main__` (or a new `transport_http.py`), reuse `analysis` / `cache`
-  / `project_loader` as-is. See `REMOTE_DEPLOYMENT.md` for the
-  workspace-scoped design.
+  / `project_loader` as-is. See `REMOTE_DEPLOYMENT.md` for the public OSS
+  MaaS and self-hosted internal MaaS split.
 - **Persistent cache.** The `AnalysisCache` interface is intentionally
   small (`get_or_build`, `clear`, `__len__`). A redis- or disk-backed
   implementation can swap in without touching the tool layer.

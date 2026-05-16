@@ -6,9 +6,12 @@ import json
 from collections.abc import Callable
 from typing import Annotated, Any, TypeVar, cast
 
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import AnyHttpUrl, BaseModel, Field, ValidationError
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from .analysis import MatchMode, build_analysis, filelist_summary, parse_summary
 from .analysis import describe_design_unit as describe_design_unit_core
@@ -19,6 +22,7 @@ from .analysis import get_hierarchy as get_hierarchy_core
 from .analysis import get_project_summary as get_project_summary_core
 from .analysis import list_design_units as list_design_units_core
 from .analysis import preprocess_files as preprocess_files_core
+from .auth import StaticBearerTokenVerifier
 from .cache import DEFAULT_CACHE, AnalysisCache
 from .project_loader import (
     PathOutsideRootError,
@@ -292,11 +296,45 @@ class ToolInputError(ValueError):
     """Raised when the caller supplies an invalid argument combination."""
 
 
-def create_server(cache: AnalysisCache | None = None) -> FastMCP:
+def _default_http_public_url(host: str, port: int) -> str:
+    public_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    return f"http://{public_host}:{port}"
+
+
+def create_server(
+    cache: AnalysisCache | None = None,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    http_bearer_token: str | None = None,
+    http_public_url: str | None = None,
+) -> FastMCP:
     """Create the MCP server instance."""
 
     analysis_cache = cache if cache is not None else DEFAULT_CACHE
-    mcp = FastMCP("pyslang_mcp")
+    token_verifier = None
+    auth_settings = None
+    if http_bearer_token:
+        public_url = http_public_url or _default_http_public_url(host, port)
+        token_verifier = StaticBearerTokenVerifier(http_bearer_token)
+        auth_url = AnyHttpUrl(public_url)
+        auth_settings = AuthSettings(
+            issuer_url=auth_url,
+            resource_server_url=auth_url,
+            required_scopes=["pyslang-mcp"],
+        )
+
+    mcp = FastMCP(
+        "pyslang_mcp",
+        host=host,
+        port=port,
+        auth=auth_settings,
+        token_verifier=token_verifier,
+    )
+
+    @mcp.custom_route("/healthz", methods=["GET"], include_in_schema=False)
+    async def healthz(_request: Request) -> JSONResponse:
+        return JSONResponse({"status": "ok", "server": "pyslang-mcp"})
 
     def resolve_project(
         *,
