@@ -12,6 +12,7 @@
   Streamable HTTP path used by the single-server internal MaaS alpha.
 - Added `/healthz` for container and service health checks.
 - Documented the public OSS MaaS versus self-hosted internal MaaS split.
+- Added CI coverage for the internal MaaS Dockerfile and Docker Compose path.
 
 ## 0.1.0a3 - 2026-04-28
 
