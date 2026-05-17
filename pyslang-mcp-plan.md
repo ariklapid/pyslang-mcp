@@ -15,16 +15,16 @@
 - The differentiation should be: Python-native, compiler-backed, token-efficient semantic inspection of local HDL projects.
 
 **V1 Scope**
-- `pyslang_parse_files`
-- `pyslang_parse_filelist`
-- `pyslang_get_diagnostics`
-- `pyslang_list_design_units`
-- `pyslang_describe_design_unit`
-- `pyslang_get_hierarchy`
-- `pyslang_find_symbol`
-- `pyslang_dump_syntax_tree_summary`
-- `pyslang_preprocess_files`
-- `pyslang_get_project_summary`
+- `parse_files`
+- `parse_filelist`
+- `get_diagnostics`
+- `list_design_units`
+- `describe_design_unit`
+- `get_hierarchy`
+- `find_symbol`
+- `dump_syntax_tree_summary`
+- `preprocess_files`
+- `get_project_summary`
 
 **Explicit Non-Goals For V1**
 - Simulation
@@ -51,6 +51,14 @@
 - Cache analysis results by project config plus file mtimes.
 - Return stable, compact JSON outputs; never dump raw full ASTs by default.
 - Add size limits, truncation markers, and clear error types for bad paths, parse errors, and unsupported queries.
+
+**MaaS / Remote Deployment Direction**
+- Treat MaaS as a separate deployment product surface, not as exposing the current local process directly over the network.
+- Plan A: public OSS MaaS for public HDL repositories, demos, education, and open-source hardware workflows. This should use ephemeral, isolated workers and must be documented as unsuitable for proprietary or confidential RTL.
+- Plan B: internal MaaS for real corporate RTL work. Companies should run `pyslang-mcp` inside their own network, with company-owned repository access, auth, logging, storage, and policy controls.
+- Preserve local `stdio` as the supported base while adding service wrappers, containers, and deployment docs around the existing read-only analysis core.
+- The Plan B alpha path now prioritizes ease of install for hardware engineers: Docker Compose, a generated `.env`, bearer-token HTTP, a native Python fallback for no-Docker corporate servers, and a single-server quickstart before Kubernetes or SSO.
+- See `REMOTE_DEPLOYMENT.md` for the full Plan A / Plan B split.
 
 **Proposed Repo Layout**
 - `README.md`
@@ -110,6 +118,7 @@
 **Documentation Plan**
 - README: problem statement, scope, quickstart, tool list, client setup, examples, non-goals.
 - ARCHITECTURE: analysis pipeline, caching, limits, trust boundaries.
+- REMOTE_DEPLOYMENT: public OSS MaaS and self-hosted internal MaaS plans.
 - ROADMAP: v1, v1.1, v2.
 - CONTRIBUTING: dev setup, test commands, fixture conventions.
 - SECURITY: clarify read-only behavior, filesystem scope, and output truncation rules.
@@ -133,6 +142,8 @@
 - M3: design-unit listing, hierarchy, symbol lookup
 - M4: hardening, caching, schema freeze, docs
 - M5: PyPI release, registry publish, announcement
+- M6: self-hosted internal MaaS deployment guide and containerized worker alpha
+- M7: public OSS MaaS demo service for public repositories only
 
 **V1 Acceptance Criteria**
 - Installs cleanly with `uvx` or `pip`
@@ -148,6 +159,8 @@
 - Hierarchy and symbol lookup may require deeper compiler traversal than the initial spike suggests.
 - Output size can explode if AST data is not summarized aggressively.
 - Real-world filelists and preprocessing conventions vary widely; support should be documented narrowly and honestly.
+- Public hosted MaaS can create false confidence for proprietary RTL unless the docs and UI make the public-code-only boundary explicit.
+- Internal MaaS requires deployment controls outside the current alpha server: auth, workspace identity, worker isolation, audit policy, and source-safe logs.
 
 **Immediate First Issues To Open**
 - repo scaffold
@@ -162,6 +175,8 @@
 - add MCP integration tests
 - add client configs
 - publish first alpha release
+- add self-hosted internal MaaS container and deployment docs
+- add public OSS MaaS threat model before any public hosted endpoint
 
 **Reference Links**
 - `pyslang`: https://pypi.org/project/pyslang/

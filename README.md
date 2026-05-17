@@ -224,8 +224,29 @@ faster and clearer.
 - `pyslang_preprocess_files` is summary-oriented. It returns preprocessing
   metadata and source excerpts, not a guaranteed full standalone preprocessed
   stream.
-- `streamable-http` exists only as an explicit experimental local transport; it
-  is not a secure hosted deployment mode.
+- `streamable-http` remains experimental. The internal MaaS alpha wraps it with
+  a bearer token for single-server use, but it is not a complete production
+  hosted security boundary by itself.
+
+## Remote MaaS Direction
+
+Remote MaaS is planned as two separate tracks, not as one generic hosted mode:
+
+- **Plan A: public OSS MaaS.** A convenience/demo service for public
+  open-source HDL repositories. This is not suitable for proprietary or
+  confidential RTL.
+- **Plan B: internal MaaS.** A self-hosted deployment pattern for companies to
+  run inside their own network, close to internal repositories, auth, logging,
+  and security controls.
+
+Start with the [internal MaaS quickstart](./docs/internal-maas-quickstart.md)
+for a single internal server. See [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md)
+for the full Plan A / Plan B split.
+
+Docker Compose is the recommended bring-up path because it avoids Python setup
+issues and mounts the RTL checkout read-only. Docker is not required; the
+quickstart also includes a native Python path for corporate servers where
+containers are not available.
 
 ## HDL Example Corpus
 
@@ -264,11 +285,16 @@ Implemented:
 - PyPI alpha release line: [`pyslang-mcp`](https://pypi.org/project/pyslang-mcp/)
 - MCP Registry entry:
   [`io.github.ariklapid/pyslang-mcp`](https://registry.modelcontextprotocol.io/?q=pyslang-mcp)
+- internal MaaS alpha artifacts: Dockerfile, Docker Compose config, native
+  Python fallback instructions, systemd template, bearer-token HTTP option, and
+  a single-server quickstart
 
 Not done yet:
 
 - schema freeze for a non-alpha release
 - broad platform validation beyond the current Linux-focused CI path
+- production MaaS hardening for broad team use: SSO, multi-workspace routing,
+  Kubernetes deployment, source-safe metrics, and reverse-proxy examples
 
 ## Development
 
@@ -283,6 +309,8 @@ Useful commands:
 Architecture and contribution docs:
 
 - [docs/architecture.md](./docs/architecture.md)
+- [docs/internal-maas-quickstart.md](./docs/internal-maas-quickstart.md)
+- [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md)
 - [docs/mcp-registry.md](./docs/mcp-registry.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 - [pyslang-mcp-plan.md](./pyslang-mcp-plan.md)

@@ -3,8 +3,9 @@
 This file is the handoff document for any AI agent or contributor working in
 this repository.
 
-Read this first, then read [README.md](./README.md) and
-[pyslang-mcp-plan.md](./pyslang-mcp-plan.md).
+Read this first, then read [README.md](./README.md),
+[pyslang-mcp-plan.md](./pyslang-mcp-plan.md), and
+[REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md).
 
 ## Mission
 
@@ -38,6 +39,11 @@ What exists:
 - `tests/` with fixture-backed coverage
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml`
+- `REMOTE_DEPLOYMENT.md`
+- `Dockerfile`
+- `deploy/internal/docker-compose.yml`
+- `deploy/internal/systemd/pyslang-mcp.service.example`
+- `docs/internal-maas-quickstart.md`
 - PyPI package `pyslang-mcp` on the public alpha line
 - MCP Registry entry `io.github.ariklapid/pyslang-mcp`
 - a local `.venv/` used for research and validation on this machine only
@@ -45,6 +51,9 @@ What exists:
 What does not exist yet:
 
 - copy-paste client configuration examples for multiple MCP clients
+- production MaaS hardening for broad internal team use, including SSO,
+  multi-workspace routing, Kubernetes manifests, reverse-proxy examples, and
+  source-safe metrics
 
 Do not describe this repo as broadly client-ready. A PyPI alpha and MCP
 Registry entry exist, but the project is still alpha.
@@ -86,6 +95,22 @@ These are not optional unless the repo direction is explicitly changed.
 - Add output limits and truncation markers early.
 - Cache by project config plus file mtimes.
 - Prefer a small analysis core with a thin MCP wrapper.
+
+## Remote / MaaS Position
+
+MaaS is planned as two distinct tracks:
+
+- public OSS MaaS for public HDL repositories only. This may be useful for
+  demos, education, and open-source hardware workflows, but it is not a
+  suitable security boundary for proprietary RTL.
+- internal MaaS for real corporate RTL work. Companies should run
+  `pyslang-mcp` inside their own network, with their own repository access,
+  auth, logging, storage, and policy controls.
+
+Do not imply that the current experimental `streamable-http` mode is a complete
+production hosted security boundary. The internal MaaS alpha wraps it with a
+bearer token for single-server use; broader team use still needs company auth,
+gatewaying, workspace routing, and audit controls.
 
 ## Progress Done So Far
 
@@ -153,6 +178,13 @@ The repository now contains:
 - manual PyPI Trusted Publishing workflow with release-gate tests
 - PyPI alpha release line
 - MCP Registry entry `io.github.ariklapid/pyslang-mcp`
+- internal MaaS alpha artifacts for a single internal server:
+  - Dockerfile
+  - Docker Compose config
+  - bearer-token HTTP option
+  - setup script
+  - native Python fallback docs
+  - quickstart docs
 
 The implemented V1 tools match the intended tool list, with one important
 honesty constraint:
@@ -214,6 +246,9 @@ The major local implementation pieces now exist. The main remaining work is:
 - schema hardening / freeze decisions
 - more filelist compatibility coverage
 - platform validation beyond current Linux-focused testing
+- production hardening for internal MaaS beyond the current single-server
+  alpha path
+- public OSS MaaS threat model before any hosted public endpoint
 
 ## Recommended Build Order
 

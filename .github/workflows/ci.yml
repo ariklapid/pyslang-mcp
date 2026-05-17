@@ -122,3 +122,55 @@ jobs:
           /tmp/pyslang-mcp-wheel-smoke/bin/python scripts/package_smoke_stdio.py \
             /tmp/pyslang-mcp-wheel-smoke/bin/pyslang-mcp \
             --project-root "$PWD/tests/fixtures/multi_file"
+
+  internal-maas-docker-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check Docker tools
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Validate internal MaaS compose config
+        env:
+          PYSLANG_MCP_WORKSPACE: ${{ github.workspace }}/tests/fixtures/multi_file
+          PYSLANG_MCP_HTTP_PORT: "18000"
+          PYSLANG_MCP_HTTP_BEARER_TOKEN: ci-token
+        run: docker compose -f deploy/internal/docker-compose.yml config
+
+      - name: Build and start internal MaaS container
+        env:
+          PYSLANG_MCP_WORKSPACE: ${{ github.workspace }}/tests/fixtures/multi_file
+          PYSLANG_MCP_HTTP_PORT: "18000"
+          PYSLANG_MCP_HTTP_BEARER_TOKEN: ci-token
+        run: |
+          docker compose -f deploy/internal/docker-compose.yml up -d --build
+
+      - name: Check internal MaaS health endpoint
+        env:
+          PYSLANG_MCP_WORKSPACE: ${{ github.workspace }}/tests/fixtures/multi_file
+          PYSLANG_MCP_HTTP_PORT: "18000"
+          PYSLANG_MCP_HTTP_BEARER_TOKEN: ci-token
+        run: |
+          for _ in {1..60}; do
+            if python -c 'import json, urllib.request; body = json.loads(urllib.request.urlopen("http://127.0.0.1:18000/healthz", timeout=2).read()); assert body == {"status": "ok", "server": "pyslang-mcp"}, body'; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose -f deploy/internal/docker-compose.yml ps
+          docker compose -f deploy/internal/docker-compose.yml logs
+          exit 1
+
+      - name: Stop internal MaaS container
+        if: always()
+        env:
+          PYSLANG_MCP_WORKSPACE: ${{ github.workspace }}/tests/fixtures/multi_file
+          PYSLANG_MCP_HTTP_PORT: "18000"
+          PYSLANG_MCP_HTTP_BEARER_TOKEN: ci-token
+        run: docker compose -f deploy/internal/docker-compose.yml down --volumes
