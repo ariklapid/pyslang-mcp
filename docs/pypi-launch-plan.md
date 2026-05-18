@@ -3,14 +3,14 @@
 This document tracks the current PyPI release status and the repeatable release
 process for `pyslang-mcp`.
 
-The current public alpha installs on Linux with:
+The current public package installs on Linux with:
 
 ```bash
-pip install --pre pyslang-mcp
+pip install pyslang-mcp
 ```
 
 The public support statement remains intentionally narrow: local-first, stdio,
-read-only, alpha, and Linux-validated.
+read-only, early-stage, and Linux-validated.
 
 ## Current State
 
@@ -27,7 +27,7 @@ Already in place:
 - macOS Python 3.12 CI for basic compatibility
 - stdio MCP protocol smoke in CI
 - HDL smoke validation on Ubuntu
-- package metadata for the public alpha line
+- package metadata for the public release line
 - wheel/sdist package smoke in CI
 - manual-only release workflow using PyPI Trusted Publishing
 - release workflow gate covering lint, type checks, tests, build checks, and
@@ -35,16 +35,16 @@ Already in place:
 - MCP Registry metadata and package ownership marker
 - MCP Registry publication for `io.github.ariklapid/pyslang-mcp`
 - PyPI project and active Trusted Publisher
-- public alpha release line on PyPI
+- public release line on PyPI
 
 Not yet in place:
 
-- non-alpha schema freeze
+- schema freeze for a more mature API-stable release
 
 ## Current Install
 
 ```bash
-pip install --pre pyslang-mcp
+pip install pyslang-mcp
 pyslang-mcp --help
 ```
 
@@ -61,8 +61,8 @@ MCP client config for a PyPI install:
 }
 ```
 
-`--pre` is required while the latest public release is an alpha. Omit `--pre`
-after publishing a stable `0.1.0` or later.
+Normal installs should use `pip install pyslang-mcp` after publishing `0.1.0`
+or later.
 
 ## Linux Feasibility
 
@@ -78,7 +78,7 @@ publishes manylinux wheels for CPython 3.11 and 3.12 on:
 That means normal Linux users on those platforms should not need to build
 `slang` locally.
 
-For the current alpha releases, the public Linux support statement is:
+For the current public releases, the public Linux support statement is:
 
 - Linux x86_64 and aarch64
 - Python 3.11 and 3.12
@@ -91,7 +91,7 @@ package may install elsewhere.
 
 ### 1. Polish package metadata
 
-Done in the repo for the first alpha line:
+Done in the repo for the first public release line:
 
 - add `authors`
 - add `maintainers` if different from authors
@@ -109,8 +109,8 @@ Done in the repo for the first alpha line:
   - `license = "Apache-2.0"`
   - `license-files = ["LICENSE"]`
 
-Keep the development status classifier as alpha while publishing alpha
-releases:
+Keep the development status classifier conservative while the project is still
+early-stage:
 
 ```toml
 "Development Status :: 3 - Alpha"
@@ -136,7 +136,7 @@ Local command shape:
 python -m pip install --upgrade pip build
 python -m build --wheel --sdist
 python -m venv /tmp/pyslang-mcp-wheel-smoke
-/tmp/pyslang-mcp-wheel-smoke/bin/pip install --pre --no-cache-dir dist/*.whl
+/tmp/pyslang-mcp-wheel-smoke/bin/pip install --no-cache-dir dist/*.whl
 /tmp/pyslang-mcp-wheel-smoke/bin/pyslang-mcp --help
 ```
 
@@ -221,7 +221,7 @@ not match the committed metadata.
 The package is live. Public install docs now use:
 
 ```bash
-pip install --pre pyslang-mcp
+pip install pyslang-mcp
 ```
 
 and:
@@ -276,11 +276,11 @@ Verify after publish:
 ```bash
 python -m venv /tmp/pyslang-mcp-pypi-check
 /tmp/pyslang-mcp-pypi-check/bin/pip install --upgrade pip
-/tmp/pyslang-mcp-pypi-check/bin/pip install --pre pyslang-mcp
+/tmp/pyslang-mcp-pypi-check/bin/pip install pyslang-mcp
 /tmp/pyslang-mcp-pypi-check/bin/pyslang-mcp --help
 ```
 
-If publishing `0.1.0` instead of an alpha version, omit `--pre`.
+Normal `0.1.0` and later installs should use `pip install pyslang-mcp`.
 
 ## Risks
 

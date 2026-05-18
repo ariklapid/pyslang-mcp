@@ -57,7 +57,7 @@
 - Plan A: public OSS MaaS for public HDL repositories, demos, education, and open-source hardware workflows. This should use ephemeral, isolated workers and must be documented as unsuitable for proprietary or confidential RTL.
 - Plan B: internal MaaS for real corporate RTL work. Companies should run `pyslang-mcp` inside their own network, with company-owned repository access, auth, logging, storage, and policy controls.
 - Preserve local `stdio` as the supported base while adding service wrappers, containers, and deployment docs around the existing read-only analysis core.
-- The Plan B alpha path now prioritizes ease of install for hardware engineers: Docker Compose, a generated `.env`, bearer-token HTTP, a native Python fallback for no-Docker corporate servers, and a single-server quickstart before Kubernetes or SSO.
+- The Plan B bring-up path now prioritizes ease of install for hardware engineers: Docker Compose, a generated `.env`, bearer-token HTTP, a native Python fallback for no-Docker corporate servers, and a single-server quickstart before Kubernetes or SSO.
 - See `REMOTE_DEPLOYMENT.md` for the full Plan A / Plan B split.
 
 **Proposed Repo Layout**
@@ -142,7 +142,7 @@
 - M3: design-unit listing, hierarchy, symbol lookup
 - M4: hardening, caching, schema freeze, docs
 - M5: PyPI release, registry publish, announcement
-- M6: self-hosted internal MaaS deployment guide and containerized worker alpha
+- M6: self-hosted internal MaaS deployment guide and containerized worker bring-up
 - M7: public OSS MaaS demo service for public repositories only
 
 **V1 Acceptance Criteria**
@@ -160,7 +160,7 @@
 - Output size can explode if AST data is not summarized aggressively.
 - Real-world filelists and preprocessing conventions vary widely; support should be documented narrowly and honestly.
 - Public hosted MaaS can create false confidence for proprietary RTL unless the docs and UI make the public-code-only boundary explicit.
-- Internal MaaS requires deployment controls outside the current alpha server: auth, workspace identity, worker isolation, audit policy, and source-safe logs.
+- Internal MaaS requires deployment controls outside the current single-server path: auth, workspace identity, worker isolation, audit policy, and source-safe logs.
 
 **Immediate First Issues To Open**
 - repo scaffold
@@ -174,7 +174,7 @@
 - implement symbol lookup
 - add MCP integration tests
 - add client configs
-- publish first alpha release
+- publish first public release
 - add self-hosted internal MaaS container and deployment docs
 - add public OSS MaaS threat model before any public hosted endpoint
 

@@ -4,7 +4,7 @@
 [![CI](https://github.com/ariklapid/pyslang-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ariklapid/pyslang-mcp/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyslang-mcp.svg)](https://pypi.org/project/pyslang-mcp/)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
-![Status](https://img.shields.io/badge/status-alpha-orange)
+![Status](https://img.shields.io/badge/status-early--stage-orange)
 ![Transport](https://img.shields.io/badge/transport-stdio-informational)
 
 `pyslang-mcp` is a local Model Context Protocol server that gives AI agents
@@ -24,10 +24,10 @@ RTL refactoring tool. It is a small semantic analysis service for local HDL
 checkouts.
 
 > [!NOTE]
-> The project is currently alpha and published on
+> The project is currently early-stage and published on
 > [PyPI](https://pypi.org/project/pyslang-mcp/) and the
 > [MCP Registry](https://registry.modelcontextprotocol.io/?q=pyslang-mcp) for
-> local stdio use. Install with `--pre` while the package uses alpha versions.
+> local stdio use.
 
 ## Why ASIC And EDA Engineers Might Care
 
@@ -51,10 +51,10 @@ Good fits:
 
 ## Quickstart
 
-Install the alpha package:
+Install the package:
 
 ```bash
-pip install --pre pyslang-mcp
+pip install pyslang-mcp
 ```
 
 Run the local stdio server:
@@ -224,7 +224,7 @@ faster and clearer.
 - `pyslang_preprocess_files` is summary-oriented. It returns preprocessing
   metadata and source excerpts, not a guaranteed full standalone preprocessed
   stream.
-- `streamable-http` remains experimental. The internal MaaS alpha wraps it with
+- `streamable-http` remains experimental. The internal MaaS path wraps it with
   a bearer token for single-server use, but it is not a complete production
   hosted security boundary by itself.
 
@@ -282,16 +282,16 @@ Implemented:
 - fixture-backed tests and Ubuntu CI for Python 3.11 and 3.12
 - package smoke CI from a built wheel
 - manual PyPI Trusted Publishing release workflow with release-gate tests
-- PyPI alpha release line: [`pyslang-mcp`](https://pypi.org/project/pyslang-mcp/)
+- PyPI package: [`pyslang-mcp`](https://pypi.org/project/pyslang-mcp/)
 - MCP Registry entry:
   [`io.github.ariklapid/pyslang-mcp`](https://registry.modelcontextprotocol.io/?q=pyslang-mcp)
-- internal MaaS alpha artifacts: Dockerfile, Docker Compose config, native
+- internal MaaS bring-up artifacts: Dockerfile, Docker Compose config, native
   Python fallback instructions, systemd template, bearer-token HTTP option, and
   a single-server quickstart
 
 Not done yet:
 
-- schema freeze for a non-alpha release
+- schema freeze for a more mature API-stable release
 - broad platform validation beyond the current Linux-focused CI path
 - production MaaS hardening for broad team use: SSO, multi-workspace routing,
   Kubernetes deployment, source-safe metrics, and reverse-proxy examples

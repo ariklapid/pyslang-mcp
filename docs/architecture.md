@@ -2,7 +2,7 @@
 
 This document describes the internal module layout of `pyslang-mcp` and how
 the pieces cooperate on a single tool call. It is intentionally scoped to
-the current alpha implementation — the public OSS MaaS and internal MaaS
+the current early implementation — the public OSS MaaS and internal MaaS
 directions are sketched separately in
 [`../REMOTE_DEPLOYMENT.md`](../REMOTE_DEPLOYMENT.md).
 
@@ -139,7 +139,7 @@ sequenceDiagram
 |---|---|---|
 | `__main__.py` | CLI. Parses `--transport`, invokes `create_server().run(transport)`. | `server` |
 | `server.py` | MCP surface. Registers ten read-only `@mcp.tool`s with `Annotated` input schemas, typed return schemas, a `/healthz` HTTP route, and a central `run_tool` wrapper that converts load / input errors into structured tool errors. | `analysis`, `project_loader`, `cache`, `schemas`, `types`, `auth`, `mcp.server.fastmcp` |
-| `auth.py` | Simple static bearer-token verifier used by the internal MaaS alpha HTTP path. This is not a replacement for company SSO in a broader team deployment. | `mcp.server.auth.provider` |
+| `auth.py` | Simple static bearer-token verifier used by the internal MaaS HTTP path. This is not a replacement for company SSO in a broader team deployment. | `mcp.server.auth.provider` |
 | `schemas.py` | Pydantic output models (one per tool) plus `ToolErrorResult`. `StrictModel` forbids extra keys; `HierarchyNode.model_rebuild()` enables recursive `children`. FastMCP reads these via `Annotated[CallToolResult, Result \| Error]`. | `pydantic` |
 | `analysis.py` | pyslang-backed analysis functions. Builds `Compilation`, elaborates, extracts diagnostics, design units, hierarchy, symbols, syntax-tree summaries, and preprocessing metadata. Everything flows through `stabilize_json` + `limit_list`. | `pyslang`, `serializers`, `types` |
 | `project_loader.py` | Normalizes and safety-checks project inputs. Resolves project roots, expands nested `.f` filelists (`-f`, `-F`, `+incdir+`, `-I`, `+define+`), records unsupported tokens, and enforces `relative_to(root)` on every path. | `types` |

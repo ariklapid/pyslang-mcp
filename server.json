@@ -3,7 +3,7 @@
   "name": "io.github.ariklapid/pyslang-mcp",
   "title": "pyslang-mcp",
   "description": "Compiler-backed read-only Verilog and SystemVerilog project analysis.",
-  "version": "0.1.0a4",
+  "version": "0.1.0",
   "websiteUrl": "https://github.com/ariklapid/pyslang-mcp",
   "repository": {
     "url": "https://github.com/ariklapid/pyslang-mcp",
@@ -15,7 +15,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "pyslang-mcp",
-      "version": "0.1.0a4",
+      "version": "0.1.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

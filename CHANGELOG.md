@@ -4,15 +4,17 @@
 
 - No unreleased changes.
 
-## 0.1.0a4 - 2026-05-16
+## 0.1.0 - 2026-05-18
 
-- Added internal MaaS alpha bring-up artifacts: Dockerfile, Docker Compose
+- Added internal MaaS bring-up artifacts: Dockerfile, Docker Compose
   config, setup script, native Python fallback docs, and a starter systemd unit.
 - Added bearer-token protection and host/port options for the experimental
-  Streamable HTTP path used by the single-server internal MaaS alpha.
+  Streamable HTTP path used by the single-server internal MaaS path.
 - Added `/healthz` for container and service health checks.
 - Documented the public OSS MaaS versus self-hosted internal MaaS split.
 - Added CI coverage for the internal MaaS Dockerfile and Docker Compose path.
+- Promoted the package version to `0.1.0` so normal installs can use
+  `pip install pyslang-mcp`.
 
 ## 0.1.0a3 - 2026-04-28
 
@@ -25,7 +27,7 @@
 ## 0.1.0a2 - 2026-04-28
 
 - Added an explicit `httpx>=0.27.1,<0.29` runtime bound so
-  `pip install --pre pyslang-mcp` does not resolve to incompatible `httpx` 1.0
+  `pip install pyslang-mcp` does not resolve to incompatible `httpx` 1.0
   development releases through transitive MCP dependencies.
 
 ## 0.1.0a1 - 2026-04-28

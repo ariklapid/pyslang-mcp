@@ -25,8 +25,10 @@ tight and technically honest.
 
 ## Current Repo Reality
 
-As of 2026-04-28, this repo has moved past the documentation-only stage into a
-PyPI-published alpha implementation.
+As of 2026-05-18, this repo has moved past the documentation-only stage into a
+PyPI-published early implementation. The source metadata is prepared for the
+first non-pre-release package, `0.1.0`, so normal installs use
+`pip install pyslang-mcp`.
 
 What exists:
 
@@ -44,7 +46,7 @@ What exists:
 - `deploy/internal/docker-compose.yml`
 - `deploy/internal/systemd/pyslang-mcp.service.example`
 - `docs/internal-maas-quickstart.md`
-- PyPI package `pyslang-mcp` on the public alpha line
+- PyPI package `pyslang-mcp`
 - MCP Registry entry `io.github.ariklapid/pyslang-mcp`
 - a local `.venv/` used for research and validation on this machine only
 
@@ -55,8 +57,8 @@ What does not exist yet:
   multi-workspace routing, Kubernetes manifests, reverse-proxy examples, and
   source-safe metrics
 
-Do not describe this repo as broadly client-ready. A PyPI alpha and MCP
-Registry entry exist, but the project is still alpha.
+Do not describe this repo as broadly client-ready. A PyPI package and MCP
+Registry entry exist, but the project is still early-stage.
 
 ## Product Definition
 
@@ -108,7 +110,7 @@ MaaS is planned as two distinct tracks:
   auth, logging, storage, and policy controls.
 
 Do not imply that the current experimental `streamable-http` mode is a complete
-production hosted security boundary. The internal MaaS alpha wraps it with a
+production hosted security boundary. The internal MaaS path wraps it with a
 bearer token for single-server use; broader team use still needs company auth,
 gatewaying, workspace routing, and audit controls.
 
@@ -162,7 +164,7 @@ The following was validated locally in a virtual environment on Python 3.12:
 - syntax-tree walking works and is suitable for summary generation
 - `tree.getIncludeDirectives()` returns useful include metadata
 
-### Implemented Alpha Server
+### Implemented Server
 
 The repository now contains:
 
@@ -176,9 +178,9 @@ The repository now contains:
 - CI on GitHub Actions for Ubuntu with Python 3.11 and 3.12
 - package smoke CI from a built wheel
 - manual PyPI Trusted Publishing workflow with release-gate tests
-- PyPI alpha release line
+- PyPI package release line
 - MCP Registry entry `io.github.ariklapid/pyslang-mcp`
-- internal MaaS alpha artifacts for a single internal server:
+- internal MaaS artifacts for a single internal server:
   - Dockerfile
   - Docker Compose config
   - bearer-token HTTP option
@@ -247,7 +249,7 @@ The major local implementation pieces now exist. The main remaining work is:
 - more filelist compatibility coverage
 - platform validation beyond current Linux-focused testing
 - production hardening for internal MaaS beyond the current single-server
-  alpha path
+  bring-up path
 - public OSS MaaS threat model before any hosted public endpoint
 
 ## Recommended Build Order
@@ -305,9 +307,9 @@ Do the work in this order unless a strong reason emerges to change it.
 
 ## Quality Bar
 
-The first alpha should meet these standards:
+The first public release should meet these standards:
 
-- installable with `uvx pyslang-mcp` or `pip install --pre pyslang-mcp`
+- installable with `uvx pyslang-mcp` or `pip install pyslang-mcp`
 - safe read-only behavior
 - useful on real multi-file SV projects
 - stable JSON outputs
@@ -333,8 +335,8 @@ If you are picking this up fresh, do this next:
    include-dir patterns, and broken multi-file projects.
 2. Harden and document filelist compatibility boundaries.
 3. Add client setup examples for local `stdio` use.
-4. Keep PyPI alpha install verification in the release checklist, especially
-   `pip install --pre pyslang-mcp` from a fresh environment.
+4. Keep PyPI install verification in the release checklist, especially
+   `pip install pyslang-mcp` from a fresh environment.
 5. Keep README and this file aligned with the true implementation status.
 
 ## Working Style

@@ -11,7 +11,7 @@ The recommended bring-up path is:
 4. keep the server port bound to `127.0.0.1` unless your IT/security team puts
    a real internal gateway in front of it
 
-The current setup is intended for internal alpha bring-up. It is not a public
+The current setup is intended for internal bring-up. It is not a public
 hosted service.
 
 ## Is Docker Required?
@@ -113,7 +113,7 @@ Create a virtual environment:
 ```bash
 python3 -m venv /opt/pyslang-mcp-venv
 /opt/pyslang-mcp-venv/bin/pip install --upgrade pip
-/opt/pyslang-mcp-venv/bin/pip install --pre 'pyslang-mcp>=0.1.0a4'
+/opt/pyslang-mcp-venv/bin/pip install 'pyslang-mcp>=0.1.0'
 ```
 
 Generate a bearer token:

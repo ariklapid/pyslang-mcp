@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pyslang-mcp"
-version = "0.1.0a4"
+version = "0.1.0"
 description = "Read-only MCP server for compiler-backed Verilog and SystemVerilog analysis using pyslang."
 readme = "README.md"
 license = "Apache-2.0"
