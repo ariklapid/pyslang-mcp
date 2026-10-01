@@ -294,12 +294,18 @@ def test_diagnostics_on_broken_fixture() -> None:
     diagnostics = get_diagnostics(bundle)
     assert diagnostics["project_status"]["status"] == "incomplete"
     assert diagnostics["project_status"]["unresolved_references"] == 1
-    assert diagnostics["summary"]["total"] == 1
-    assert diagnostics["diagnostics"][0]["severity"] == "error"
-    assert "missing_symbol" in diagnostics["diagnostics"][0]["message"]
+    # slang 12 reports both an implicit-net warning for the undeclared LHS and
+    # the undeclared-identifier error for the missing RHS symbol.
+    assert diagnostics["summary"]["total"] == 2
+    assert diagnostics["summary"]["severity_counts"] == {"error": 1, "warning": 1}
+    error_diagnostics = [
+        diagnostic for diagnostic in diagnostics["diagnostics"] if diagnostic["severity"] == "error"
+    ]
+    assert len(error_diagnostics) == 1
+    assert "missing_symbol" in error_diagnostics[0]["message"]
 
     hidden_diagnostics = get_diagnostics(bundle, max_items=0)
-    assert hidden_diagnostics["summary"]["total"] == 1
+    assert hidden_diagnostics["summary"]["total"] == 2
     assert hidden_diagnostics["summary"]["truncation"]["returned"] == 0
     assert hidden_diagnostics["summary"]["truncation"]["truncated"] is True
 
@@ -324,11 +330,16 @@ def test_summarize_diagnostics_by_code_on_broken_fixture() -> None:
     )
 
     assert summary["project_status"]["status"] == "incomplete"
-    assert summary["summary"]["total_diagnostics"] == 1
-    assert summary["summary"]["total_groups"] == 1
-    assert summary["groups"][0]["count"] == 1
-    assert summary["groups"][0]["unresolved_reference_count"] == 1
-    assert len(summary["groups"][0]["examples"]) == 1
+    # Two groups under slang 12: the implicit-net warning and the
+    # undeclared-identifier error, each with a single occurrence.
+    assert summary["summary"]["total_diagnostics"] == 2
+    assert summary["summary"]["total_groups"] == 2
+    assert all(group["count"] == 1 for group in summary["groups"])
+    unresolved_group = next(
+        group for group in summary["groups"] if group["unresolved_reference_count"] == 1
+    )
+    assert unresolved_group["severity"] == "error"
+    assert len(unresolved_group["examples"]) == 1
 
 
 def test_format_diagnostic_message_preserves_escaped_braces() -> None:

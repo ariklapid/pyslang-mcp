@@ -209,7 +209,7 @@ async def _assert_all_public_tools_call_successfully(
     assert payloads[PUBLIC_TOOL_NAMES["get_diagnostics"]]["summary"]["total"] == 0
     assert (
         payloads[PUBLIC_TOOL_NAMES["summarize_diagnostics_by_code"]]["summary"]["total_diagnostics"]
-        == 1
+        == 2
     )
     design_units = payloads[PUBLIC_TOOL_NAMES["list_design_units"]]["design_units"]
     assert {"top", "child", "types_pkg"} <= {unit["name"] for unit in design_units}

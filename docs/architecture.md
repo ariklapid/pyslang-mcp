@@ -50,7 +50,7 @@ flowchart TD
 
     subgraph Ext["External"]
         FastMCP["mcp.server.fastmcp<br/>mcp.types"]
-        Pyslang["pyslang<br/>SyntaxTree / Compilation<br/>SourceManager / Bag<br/>DiagnosticEngine<br/>PreprocessorOptions / CompilationOptions"]
+        Pyslang["pyslang 12.x<br/>pyslang.syntax.SyntaxTree<br/>pyslang.ast.Compilation / CompilationOptions<br/>pyslang.parsing.PreprocessorOptions<br/>SourceManager / Bag / DiagnosticEngine"]
         Pydantic["pydantic<br/>BaseModel / ConfigDict / Field"]
     end
 

@@ -9,15 +9,10 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Literal
 
-from pyslang import (
-    Bag,
-    Compilation,
-    CompilationOptions,
-    DiagnosticEngine,
-    PreprocessorOptions,
-    SourceManager,
-    SyntaxTree,
-)
+from pyslang import Bag, DiagnosticEngine, SourceManager
+from pyslang.ast import Compilation, CompilationOptions
+from pyslang.parsing import PreprocessorOptions
+from pyslang.syntax import SyntaxTree
 
 from .serializers import (
     ensure_jsonable_paths,

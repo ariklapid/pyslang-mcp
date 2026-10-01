@@ -6,7 +6,7 @@
 
 **Architecture:** Extend the existing `analysis.py` core before touching the FastMCP wrapper. The implementation should build richer per-project indexes from the cached `AnalysisBundle`, expose bounded and schema-validated JSON through `server.py`, and keep syntax-derived fallback evidence explicitly labeled where pyslang semantic bindings are unavailable.
 
-**Tech Stack:** Python 3.11+, `pyslang>=10,<11`, official MCP Python SDK `FastMCP`, Pydantic v2 output schemas, pytest, pyright, ruff, existing fixture and eval harnesses.
+**Tech Stack:** Python 3.11+, `pyslang>=12,<13`, official MCP Python SDK `FastMCP`, Pydantic v2 output schemas, pytest, pyright, ruff, existing fixture and eval harnesses.
 
 ---
 

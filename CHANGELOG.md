@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-- No unreleased changes.
+- Require `pyslang` 12.x and update imports for its reorganized Python API.
+  `Compilation` and `CompilationOptions` now come from `pyslang.ast`,
+  `PreprocessorOptions` from `pyslang.parsing`, and `SyntaxTree` from
+  `pyslang.syntax`.
+- Account for slang 12's additional implicit-net warning when reporting an
+  undeclared assignment target alongside an undeclared identifier error.
 
 ## 0.1.0 - 2026-05-18
 

@@ -165,8 +165,11 @@ def test_summarize_diagnostics_by_code_tool() -> None:
     )
 
     assert not is_error
-    assert payload["summary"]["total_diagnostics"] == 1
-    assert payload["groups"][0]["count"] == 1
+    # slang 12 reports two diagnostics for the broken fixture: an implicit-net
+    # warning and the undeclared-identifier error, each in its own group.
+    assert payload["summary"]["total_diagnostics"] == 2
+    assert payload["summary"]["total_groups"] == 2
+    assert all(group["count"] == 1 for group in payload["groups"])
 
 
 def test_find_member_tool() -> None:
